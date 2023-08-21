@@ -1,19 +1,21 @@
 model OrificeCD
   // Constants
   import Modelica.Constants.pi;
-  parameter Real D1 = 1 "Diameter 1";
-  parameter Real D2 = 0.5 "Diameter 2";
-  parameter Real rho = 62.4/12^3 "Density";
-  parameter Real cyl_area = 2.5^2 * pi "Cylinder Area";
+  import Modelica.Units.SI; // Import the SIunits library
+  
+  parameter SI.Length D1 = .0254 "Diameter 1"; // 1"
+  parameter SI.Length D2 = .01905 "Diameter 2"; // 0.5"
+  parameter SI.Density rho = 998 "rho room temp water"; // Density of water at room temperature in kg/m^3
+  parameter SI.Area cyl_area = (2.5*2.54/100)^2 * pi "Cylinder Area";
 
   parameter Real d = D2/D1 "Diameter ratio";
 
   // Variables
-  Real q(start = 0) "Rate of change of potentiometer";
   Real cd(start = 0) "Coefficient of discharge";
-  Real P1(start = 0) "US reading";
-  Real P2(start = 0) "DS reading";
+  SI.Pressure P1(start = 0) "US reading";
+  SI.Pressure P2(start = 0) "DS reading";
   Real potentiometer_reading(start = 0) "Potentiometer reading";
+  SI.VolumeFlowRate q(start = 0) "Flow Rate in m3/s";
   
 initial equation
   // Initial conditions can be specified here if needed
@@ -23,7 +25,7 @@ equation
   // Define the differential equation for potentiometer_reading.
   // For the sake of this model, we'll assume a constant rate of change.
   // You can modify this to simulate different behaviors.
-  der(potentiometer_reading) = .3; // 1 unit/s for demonstration purposes
+  der(potentiometer_reading) = .609; // m/s
   
   // Coefficient of discharge calculation
   q = der(potentiometer_reading) * cyl_area;
@@ -31,7 +33,7 @@ equation
 
   // Placeholders for P1 and P2, you can replace these with actual equations or 
   // data sources (e.g., other components in a more complex model).
-  P1 = 50; // Placeholder value
-  P2 = 14.75; // Placeholder value
+  P1 = 689476; // Placeholder value in Pascals
+  P2 = 101697; // Placeholder value in Pascals
 
 end OrificeCD;
