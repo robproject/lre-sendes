@@ -1,0 +1,23 @@
+# PlatformIO
+arduino/arduinio/*.pio
+arduino/arduinio/*.pioenvs
+arduino/arduinio/*.piolibdeps
+arduino/arduinio/.vscode/.browse.c_cpp.db*
+arduino/arduinio/.vscode/c_cpp_properties.json
+arduino/arduinio/.vscode/launch.json
+arduino/arduinio/.vscode/ipch
+
+# Editors and IDEs
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
