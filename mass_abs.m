@@ -1,24 +1,18 @@
 % Absolute value of sensitivity per variable
-gal2m3 = @(gal) gal*0.003785411784;
-% piston dims
-vol = 5; % gallons
-piston_dia = 5; % piston dia inch
-piston_dia = convlength(piston_dia, 'in', 'm'); % piston dia m
-vol = gal2m3(vol); % vol cubic m
-piston_len = vol / (pi * (piston_dia/2)^2); % piston len m
-t = 2.46 ; % seconds
-dx = piston_len/t;
+
+% load cell and pump info
+kg = 18.905 ; % 5 gal water
+dm = kg / 2.46; % 5gal / 2.46 s
 
 % accuracies
 micrometer = .0005; % inches
 transducer = .5; % psi
+adc = kg / 1024; % kg
 
 micrometer = convlength(micrometer, 'in', 'm');
 transducer = convpres(transducer, 'psi', 'Pa');
-adc = piston_len / 1024; % meters
 
 abs2per = @(nominal, accuracy) accuracy / nominal;
-
 % nominal values and conversions
 
 d1_i = 1; % inch
@@ -26,7 +20,7 @@ d2_i = .75; % inch
 us_p = 100; % psi
 ds_p = 14.75; % psi
 
-piston_dia = convlength(piston_dia, 'in', 'm');
+
 d1 = convlength(d1_i, 'in', 'm');
 d2 = convlength(d2_i, 'in', 'm');
 us = convpres(us_p, 'psi', 'Pa');
@@ -35,15 +29,15 @@ ds = convpres(ds_p, 'psi', 'Pa');
 
 
 % Define array variable names and their nominal and deviation values
-vars = {'piston_dia', 'plunger_v', 'pipe_d', 'orifice_d', 'rho', 'p1', 'p2'};
-nominal_values = [piston_dia, dx, d1, d2, 998, us, ds];
-deviations = nominal_values .* [abs2per(piston_dia, micrometer), abs2per(dx, adc), abs2per(d1, micrometer), abs2per(d2, micrometer), 0, abs2per(us, transducer), abs2per(ds, transducer)];
+vars = {'dm', 'pipe_d', 'orifice_d', 'rho', 'p1', 'p2'};
+nominal_values = [dm, d1, d2, 998, us, ds];
+deviations = nominal_values .* [abs2per(dm, adc), abs2per(d1, micrometer), abs2per(d2, micrometer), 0, abs2per(us, transducer), abs2per(ds, transducer)];
 
 % Define function to estimate flow rate
-cd = @(piston_dia, v, d1, d2, rho, p1, p2) (pi * (piston_dia/2)^2 * v) / (pi / 4 * d2^2 * (2 * (p1 - p2))/sqrt(rho * (1-(d2/d1)^4)));
+cd = @(dm, d1, d2, rho, p1, p2) (dm/rho) / (pi / 4 * d2^2 * (2 * (p1 - p2))/sqrt(rho * (1-(d2/d1)^4)));
 
 % Estimate flow rate at nominal values
-cd_nominal = cd(nominal_values(1), nominal_values(2), nominal_values(3), nominal_values(4), nominal_values(5), nominal_values(6), nominal_values(7));
+cd_nominal = cd(nominal_values(1), nominal_values(2), nominal_values(3), nominal_values(4), nominal_values(5), nominal_values(6));
 disp(cd_nominal);
 
 % Estimate flow rate at nominal values ± deviation for each variable
@@ -53,8 +47,8 @@ cd_n = zeros(1, length(vars));
 for i = 1:length(vars)
     delta = zeros(1, length(vars));
     delta(i) = deviations(i);
-    cd_p(i) = cd(nominal_values(1) + delta(1), nominal_values(2) + delta(2), nominal_values(3) + delta(3), nominal_values(4) + delta(4), nominal_values(5) + delta(5), nominal_values(6) + delta(6), nominal_values(7) + delta(7));
-    cd_n(i) = cd(nominal_values(1) - delta(1), nominal_values(2) - delta(2), nominal_values(3) - delta(3), nominal_values(4) - delta(4), nominal_values(5) - delta(5), nominal_values(6) - delta(6), nominal_values(7) - delta(7));
+    cd_p(i) = cd(nominal_values(1) + delta(1), nominal_values(2) + delta(2), nominal_values(3) + delta(3), nominal_values(4) + delta(4), nominal_values(5) + delta(5), nominal_values(6) + delta(6));
+    cd_n(i) = cd(nominal_values(1) - delta(1), nominal_values(2) - delta(2), nominal_values(3) - delta(3), nominal_values(4) - delta(4), nominal_values(5) - delta(5), nominal_values(6) - delta(6));
 end
 
 % Calculate sensitivity for each variable

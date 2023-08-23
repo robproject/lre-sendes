@@ -1,11 +1,11 @@
-close all;
+
 % Device parameters 
 % Number of simulations
 N = 10000;
 
 % piston dims
 vol = 5; % gallons
-piston_dia = 2.5; % piston dia inch
+piston_dia = 5; % piston dia inch
 piston_dia = convlength(piston_dia, 'in', 'm'); % piston dia m
 vol = gal2m3(vol); % vol cubic m
 piston_len = vol / (pi * (piston_dia/2)^2); % piston len m
