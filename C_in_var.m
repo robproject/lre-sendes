@@ -4,7 +4,7 @@ syms Cd D2 D1 Di B rho v xf xi q cP
 
 % Where D2 = orifice diameter, D1 = provided pipe diameter, Di = vessel diameter
 % and cP = change in pressure.
-
+% ----------- VOLUME APPROACH -----------------------------
 Cd = (4/pi)*sqrt(rho/2)*q*D2^(-2)*sqrt(1-(B)^4)*(cP)^(-1/2);
 q_sensitivity = (diff(Cd,q)/Cd*q)^2
 D2_sensitivity = (diff(Cd,D2)/Cd*D2)^2
