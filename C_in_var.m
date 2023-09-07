@@ -47,10 +47,14 @@ get_elasticities('Cd', Cd, vars)
 % Cd = 4*(Di/2)^2 * v * D2^(-2) * (2* cP * (rho * (1-(D2/D1)^4))^(-1))^(-1/2);
 
 % With decomposed dvolume
-vars = [D2, D1, Di, rho, cP, xf, xi, tf, ti];
- Cd = 4*(Di/2)^2 * (xf-xi)/(tf-ti) * D2^(-2) * (2* cP * (rho * (1-(D2/D1)^4))^(-1))^(-1/2);
+
+vars = ["D2", "D1", "Di", "rho", "cP", "xf", "xi", "tf", "ti"];
+syms(vars(:));
+`Cd = 4*(Di/2)^2 * (xf-xi)/(tf-ti) * D2^(-2) * (2* cP * (rho * (1-(D2/D1)^4))^(-1))^(-1/2);
 
 get_elasticities('Cd', Cd, vars)
+
+
 
 %% Functions
 

@@ -1,3 +1,5 @@
+% monte carlo simulation of mass per variable
+
 close all;
 % Device parameters 
 % Number of simulations

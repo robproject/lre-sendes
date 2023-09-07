@@ -1,4 +1,4 @@
-% Absolute value of sensitivity per variable
+% Absolute value of sensitivity per variable, mass
 
 % load cell and pump info
 kg = 18.905 ; % 5 gal water

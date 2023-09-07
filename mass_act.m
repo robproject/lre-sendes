@@ -1,4 +1,4 @@
-% Actual value of sensitivity per variable
+% Actual value of sensitivity per variable, mass
 
 % Define variables and their nominal and deviation values
 vars = {'dm', 'pipe_d', 'orifice_d', 'rho', 'p1', 'p2'};
