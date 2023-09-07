@@ -1,4 +1,4 @@
-% Actual value of sensitivity per variable
+% Actual value of sensitivity per variable, volume
 % accuracies
 micrometer = .0005; % inches
 transducer = .5; % psi

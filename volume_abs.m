@@ -1,4 +1,4 @@
-% Absolute value of sensitivity per variable
+% Absolute value of sensitivity per variable, volume
 gal2m3 = @(gal) gal*0.003785411784;
 % piston dims
 vol = 5; % gallons

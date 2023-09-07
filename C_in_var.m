@@ -6,6 +6,7 @@ syms Cd D2 D1 Di B rho v xf xi q cP
 % and cP = change in pressure.
 
 Cd = (4/pi)*sqrt(rho/2)*q*D2^(-2)*sqrt(1-(B)^4)*(cP)^(-1/2);
+
 q_sensitivity = (diff(Cd,q)/Cd*q)^2
 D2_sensitivity = (diff(Cd,D2)/Cd*D2)^2
 B_sensitivity = (diff(Cd,B)/Cd*B)^2
@@ -25,3 +26,45 @@ xf_sensitivity = (diff(Cd,xf)/Cd*xf)^2;
 xi_sensitivity = (diff(Cd,xi)/Cd*xi)^2;
 simplify(xf_sensitivity)
 simplify(xi_sensitivity)
+
+%% Mass Approach
+syms mf mi tf ti dm dt
+
+% Without decomposed dmass
+% vars = [D1, D2, rho, dm, cP, dt];
+% Cd = (4/pi) *  (dm/(dt * rho)) * D2^-2 * (2*(cP) * (rho*(1-(D2/D1)^4))^(-1))^(-1/2);
+
+% With decomposed dmass
+vars = [D1, D2, rho, mf, mi, cP, tf, ti];
+Cd = (4/pi) *  ((mf-mi)/((tf-ti) * rho)) * D2^-2 * (2*(cP) * (rho*(1-(D2/D1)^4))^(-1))^(-1/2);
+
+get_elasticities('Cd', Cd, vars)
+
+%% Volume Approach
+
+% Without decomposed dvolume
+% vars = [D2, D1, Di, rho, v,  cP];
+% Cd = 4*(Di/2)^2 * v * D2^(-2) * (2* cP * (rho * (1-(D2/D1)^4))^(-1))^(-1/2);
+
+% With decomposed dvolume
+
+vars = ["D2", "D1", "Di", "rho", "cP", "xf", "xi", "tf", "ti"];
+syms(vars(:));
+`Cd = 4*(Di/2)^2 * (xf-xi)/(tf-ti) * D2^(-2) * (2* cP * (rho * (1-(D2/D1)^4))^(-1))^(-1/2);
+
+get_elasticities('Cd', Cd, vars)
+
+
+
+%% Functions
+
+function get_elasticities(name, fx, vars)
+
+    fprintf('%s \n', name)
+    pretty(fx)
+
+    for i=1:length(vars)
+        fprintf('Partial elasticity (sensitivity) of %s with respect to %s \n', name, vars(i));
+        pretty(diff(fx,vars(i))/fx * vars(i));
+    end
+end
