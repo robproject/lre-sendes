@@ -6,18 +6,12 @@ d1 = 1; % pipe size (in)
 rho = 62.4/(12*12*12); % density of the fluid (lbs/in^3)
 %------------------------------------------------------------------
 %_Input values_
-prompt = {'Orifice Size:','Pressure 1:','Pressure 2:','fluid flow:'};
-dlgtitle = 'Variables';
-dims = [1 35];
-definputs = {'','','',''}
-answer = inputdlg(prompt,dlgtitle,dims,definputs);
-UD_Input = cell2struct(answer)
 Approach = 'Volume' ;
 d2 = 0.25; % orifice size (in) [0.25 & 0.75]
-P1 = answer(2,1); % Pressure before orifice (Psi)
-P2 = answer(3,1); % Pressure after orifice (Psi) (atmospheric pressure)
+P1 = 100; % Pressure before orifice (Psi)
+P2 = 50; % Pressure after orifice (Psi) (atmospheric pressure)
 v  = 10;    % velocity of fluid
-q  = answer(4,1);
+q  = 100;
 %------------------------------------------------------------------
 % _Theoretical_
 if d2==0.25
@@ -27,6 +21,7 @@ elseif d2==0.75
 end
 %------------------------------------------------------------------
 % Area calculated through a Function
+
 a1 = calcArea(d1);
 a2 = calcArea(d2);
 bR = a2/a1 ;
