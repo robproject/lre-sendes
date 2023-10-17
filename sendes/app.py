@@ -247,12 +247,14 @@ def index():
 
     recent_constants = Constants.query.order_by(Constants.id.asc()).all()
     constants_form.constants_dropdown.choices = [
-        f"{c.id} {c.piston_rad} {c.orifice_id} {c.rho} {c.downstream_id} {c.v2p} {c.v2l}" for c in recent_constants
+        f"{c.id} {c.piston_rad} {c.orifice_id} {c.rho} {c.downstream_id} {c.v2p} {c.v2l}"
+        for c in recent_constants
     ]
 
     recent_ljconfigs = Ljconfig.query.order_by(Ljconfig.id.asc()).all()
     ljconfig_form.ljconfig_dropdown.choices = [
-        f"{ljc.id} {ljc.scan_rate} {ljc.read_count} {ljc.stream_settling_us} {ljc.stream_resolution_index} {ljc.ain0_range}" for ljc in recent_ljconfigs
+        f"{ljc.id} {ljc.scan_rate} {ljc.read_count} {ljc.stream_settling_us} {ljc.stream_resolution_index} {ljc.ain0_range}"
+        for ljc in recent_ljconfigs
     ]
 
     recent_tests = (
@@ -263,7 +265,8 @@ def index():
         .all()
     )
     result_form.test_dropdown.choices = [
-        f"{t.id} {t.cd:1.3f} {t.start[:-7]} {t.scan_rate_actual:.2f}" for t in recent_tests
+        f"{t.id} {t.cd:1.3f} {t.start[:-7]} {t.scan_rate_actual:.2f}"
+        for t in recent_tests
     ]
     if not test_instance:
         if result_form.test_dropdown.choices:
