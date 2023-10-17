@@ -15,11 +15,11 @@ from labjack import ljm
 import numpy as np
 import matplotlib.pyplot as plt
 
-IMG_FOLDER = os.path.join('sendes', 'assets')
+IMG_FOLDER = os.path.join("sendes", "assets")
 
 
 app = Flask(__name__)
-app.config['PNG_FOLDER'] = IMG_FOLDER
+app.config["PNG_FOLDER"] = IMG_FOLDER
 
 
 class Base(DeclarativeBase):
@@ -122,7 +122,6 @@ class Result(db.Model):
     test_id: Mapped[int] = mapped_column(db.ForeignKey("test.id"))
 
 
-
 with app.app_context():
     db.create_all()
 
@@ -146,7 +145,7 @@ class LJConfigForm(FlaskForm):
     stream_resolution_index = IntegerField(
         "Noise Reduction", validators=[NumberRange(min=0, max=8)], default=0
     )
-    ain0_range = SelectField("AIN Gain", choices=[10, 1, 0.1, 0.01], default=10)
+    ain0_range = SelectField("AIN0 Gain", choices=[10, 1, 0.1, 0.01], default=10)
 
     ljconfig_dropdown = SelectField("Select LJ Config")
 
@@ -162,10 +161,12 @@ class ResultForm(FlaskForm):
 @app.route("/", methods=["GET", "POST"])
 def index():
     constants_form = ConstantsForm(meta={"csrf": False})
-    recent_constants = Constants.query.order_by(Constants.id.asc()).all()
-    constants_form.constants_dropdown.choices = [
-        f"{c.id} {c.piston_rad} {c.downstream_id}" for c in recent_constants
-    ]
+    ljconfig_form = LJConfigForm(meta={"csrf": False})
+    result_form = ResultForm(meta={"csrf": False})
+    test_form = TestForm(meta={"csrf": False})
+    test_instance = None
+
+    # dropdown was changed
     if "constants_dropdown" in request.form:
         constants = db.session.get(
             Constants, constants_form.constants_dropdown.data.split(" ")[0]
@@ -178,11 +179,6 @@ def index():
         constants_form.v2p.data = constants.v2p
         constants_form.v2l.data = constants.v2l
 
-    ljconfig_form = LJConfigForm(meta={"csrf": False})
-    recent_ljconfigs = Ljconfig.query.order_by(Ljconfig.id.asc()).all()
-    ljconfig_form.ljconfig_dropdown.choices = [
-        f"{ljc.id} {ljc.scan_rate} {ljc.read_count}" for ljc in recent_ljconfigs
-    ]
     if "ljconfig_dropdown" in request.form:
         ljconfig = db.session.get(
             Ljconfig, ljconfig_form.ljconfig_dropdown.data.split(" ")[0]
@@ -194,14 +190,6 @@ def index():
         ljconfig_form.stream_resolution_index.data = ljconfig.stream_resolution_index
         ljconfig_form.ain0_range.data = ljconfig.ain0_range
 
-    result_form = ResultForm(meta={"csrf": False})
-    recent_tests = Test.query.order_by(Test.id.asc()).filter_by(
-        ljconfig_id=ljconfig_form.id.data, constants_id=constants_form.id.data
-    )
-    result_form.test_dropdown.choices = [
-        f"{t.id} {t.constants_id} {t.ljconfig_id}" for t in recent_tests
-    ]
-    plot_path = "/"
     if "test_dropdown" in request.form:
         # render test
         test_instance = db.session.get(
@@ -224,17 +212,20 @@ def index():
         constants_form.v2l.data = constants.v2l
         plot_path = test_instance.result_imgpath
 
-    test_form = TestForm(meta={"csrf": False})
+    # all form data is accessible individually
     if "submit" in request.form:
         config_dict = {
             k.replace("constants_", "")
             .replace("ljconfig_", "")
             .replace("_hidden", ""): float(v)
             for k, v in request.form.items()
-            if k != "submit"
+            if "dropdown" not in k and k != "submit"
         }
-        test_id = test(config_dict)
-        test_instance = db.session.get(Test, test_id)
+        test_result = execute_test(config_dict)
+        if type(test_result) is int:
+            test_instance = db.session.get(Test, test_result)
+        else:
+            return test_result
         calc_results(test_instance.id)
         plot_path = generate_plot(test_instance.id)
         ljconfig = db.session.get(Ljconfig, test_instance.ljconfig_id)
@@ -252,18 +243,56 @@ def index():
         constants_form.downstream_id.data = constants.downstream_id
         constants_form.v2p.data = constants.v2p
         constants_form.v2l.data = constants.v2l
+        result_form.test_dropdown.data = f"{test_instance.id} {test_instance.cd:1.3f} {test_instance.start[:-7]} {test_instance.scan_rate_actual:.2f}"
 
+    recent_constants = Constants.query.order_by(Constants.id.asc()).all()
+    constants_form.constants_dropdown.choices = [
+        f"{c.id} {c.piston_rad} {c.orifice_id} {c.rho} {c.downstream_id} {c.v2p} {c.v2l}" for c in recent_constants
+    ]
+
+    recent_ljconfigs = Ljconfig.query.order_by(Ljconfig.id.asc()).all()
+    ljconfig_form.ljconfig_dropdown.choices = [
+        f"{ljc.id} {ljc.scan_rate} {ljc.read_count} {ljc.stream_settling_us} {ljc.stream_resolution_index} {ljc.ain0_range}" for ljc in recent_ljconfigs
+    ]
+
+    recent_tests = (
+        Test.query.order_by(Test.id.desc())
+        .filter_by(
+            ljconfig_id=ljconfig_form.id.data, constants_id=constants_form.id.data
+        )
+        .all()
+    )
+    result_form.test_dropdown.choices = [
+        f"{t.id} {t.cd:1.3f} {t.start[:-7]} {t.scan_rate_actual:.2f}" for t in recent_tests
+    ]
+    if not test_instance:
+        if result_form.test_dropdown.choices:
+            test_instance = db.session.get(
+                Test, result_form.test_dropdown.choices[0].split(" ")[0]
+            )
+            plot_path = test_instance.result_imgpath
+        else:
+            plot_path = "favicon/lre.png"
+
+    test_instance = {
+        "start": f"{test_instance.start[:-4]}",
+        "end": f"{test_instance.end[:-4]}",
+        "duration": f"{test_instance.duration[:-4]}",
+        "scan_rate_actual": f"{test_instance.scan_rate_actual:.1f}",
+        "cd": f"{test_instance.cd:0.3f}",
+    }
     template_dict = {
         "constants_form": constants_form,
         "ljconfig_form": ljconfig_form,
         "test_form": test_form,
         "result_form": result_form,
-        "plot_path": plot_path
+        "plot_path": plot_path,
+        "test_instance": test_instance,
     }
     return render_template("index.html", **template_dict)
 
 
-def test(config_dict):
+def execute_test(config_dict):
     with app.app_context():
         # Open first found LabJack
         handle = ljm.openS()
@@ -292,7 +321,7 @@ def test(config_dict):
         # individual analog inputs, but the stream has only one settling time and
         # resolution.
 
-        # ljm config object creation and db save
+        # ljm config object creation
         aConfig = {
             "AIN_ALL_NEGATIVE_CH": ljm.constants.GND,
             "AIN0_RANGE": config_dict["ain0_range"],
@@ -309,14 +338,8 @@ def test(config_dict):
         }
         ljconfig_dict.update({k.lower(): v for k, v in aConfig.items()})
         ljconfig_entry = Ljconfig(**ljconfig_dict)
-        try:
-            db.session.add(ljconfig_entry)
-            db.session.commit()
-        except db.exc.IntegrityError:
-            db.session.rollback()
-            ljconfig_entry = Ljconfig.query.filter_by(**ljconfig_dict).first()
 
-        # constants object creation and db save
+        # constants object creation
         piston_rad = config_dict["piston_rad"]
         orifice_id = config_dict["orifice_id"]
         downstream_id = config_dict["downstream_id"]
@@ -333,12 +356,6 @@ def test(config_dict):
             "v2l": v2l,
         }
         constants_entry = Constants(**constants_dict)
-        try:
-            db.session.add(constants_entry)
-            db.session.commit()
-        except db.exc.IntegrityError:
-            db.session.rollback()
-            constants_entry = Constants.query.filter_by(**constants_dict).first()
 
         try:
             # lj stream config
@@ -357,20 +374,6 @@ def test(config_dict):
             )
             sync_2 = datetime.now()
             start = sync_1 + (sync_2 - sync_1) / 2
-
-            # initialize test db entry
-            test_entry = Test(
-                start=start.isoformat(),
-                cd=0.0,
-                result_imgpath='/',
-                scan_rate_actual=0.0,
-                end="test incomplete",
-                duration="test incomplete",
-                ljconfig_id=ljconfig_entry.id,
-                constants_id=constants_entry.id,
-            )
-            db.session.add(test_entry)
-            db.session.commit()
 
             # start test
             ljm.eWriteName(handle, "DAC0", 5)
@@ -391,6 +394,39 @@ def test(config_dict):
                     print("valve closed")
 
                 ret = ljm.eStreamRead(handle)
+
+                if i == 1:
+                    # commit constant and config entries
+                    try:
+                        db.session.add(constants_entry)
+                        db.session.commit()
+                    except db.exc.IntegrityError:
+                        db.session.rollback()
+                        constants_entry = Constants.query.filter_by(
+                            **constants_dict
+                        ).first()
+                    try:
+                        db.session.add(ljconfig_entry)
+                        db.session.commit()
+                    except db.exc.IntegrityError:
+                        db.session.rollback()
+                        ljconfig_entry = Ljconfig.query.filter_by(
+                            **ljconfig_dict
+                        ).first()
+
+                    # initialize test db entry
+                    test_entry = Test(
+                        start=start.isoformat(),
+                        cd=0.0,
+                        result_imgpath="/",
+                        scan_rate_actual=0.0,
+                        end="test incomplete",
+                        duration="test incomplete",
+                        ljconfig_id=ljconfig_entry.id,
+                        constants_id=constants_entry.id,
+                    )
+                    db.session.add(test_entry)
+                    db.session.commit()
 
                 aData = ret[0]
                 ljScanBacklog = ret[1]
@@ -456,10 +492,14 @@ def test(config_dict):
             ljme = sys.exc_info()[1]
             ljm.eWriteName(handle, "DAC0", 0)
             print(f"valve closed\n {ljme}")
+            ljm.close(handle)
+            return f"{ljme}"
         except Exception:
             e = sys.exc_info()[1]
             ljm.eWriteName(handle, "DAC0", 0)
             print(f"valve closed\n {e}")
+            ljm.close(handle)
+            return f"{e}"
 
         try:
             print("\nStop Stream")
@@ -467,11 +507,14 @@ def test(config_dict):
         except ljm.LJMError:
             ljme = sys.exc_info()[1]
             print(ljme)
+            ljm.close(handle)
+            return f"{ljme}"
         except Exception:
             e = sys.exc_info()[1]
             print(e)
+            ljm.close(handle)
+            return f"{e}"
 
-        # Close handle
         ljm.close(handle)
         return test_entry.id
 
@@ -492,12 +535,16 @@ def calc_results(test_id):
     # window of scans to output 100 result points
     result_objects = []
     window_size = int(len(scans) / 100)
+    dtypes = [("ain0", float), ("ain1", float), ("ain2", float)]
+    scans_np = np.array(
+        [(scan.ain0, scan.ain1, scan.ain2) for scan in scans], dtype=dtypes
+    )
     for i in range(0, len(scans), window_size):
-        window = scans[i : i + window_size]
+        window = scans_np[i : i + window_size]
         result_entry = {
-            "p1": np.average([scan.ain0 for scan in window]),
-            "p2": np.average([scan.ain1 for scan in window]),
-            "x": np.average(np.diff([scan.ain2 for scan in window])),
+            "p1": window["ain0"].mean(),
+            "p2": window["ain1"].mean(),
+            "x": np.diff(window["ain2"]).mean(),
             "t": window_size * 1 / test_instance.scan_rate_actual,
             "test_id": test_id,
         }
@@ -506,10 +553,9 @@ def calc_results(test_id):
         result_objects.append(result_entry)
     db.session.execute(db.insert(Result), result_objects)
 
-    # update test with averaged cd
-    test_instance.cd = np.average([r["cd"] for r in result_objects])
+    # update test with averaged cd from slice of results
+    test_instance.cd = np.average([r["cd"] for r in result_objects[20:80]])
     db.session.commit()
-    generate_plot
 
 
 def get_cd(r: dict, c: Constants):
@@ -538,22 +584,23 @@ def generate_plot(test_id):
     cd = []
     for i, r in enumerate(results):
         t.append(ts)
-        ts+=r.t
+        ts += r.t
         x.append(r.x)
         p1.append(r.p1)
         p2.append(r.p2)
         cd.append(r.cd)
 
-    plt.plot(t, x)
-    plt.plot(t, p1)
-    plt.plot(t, p2)
-    plt.plot(t, cd)
     img_name = f"{test_id}.png"
-    plt.savefig(f"static/{img_name}")
-    test_instance = db.session.get(Test,test_id)
+    test_instance = db.session.get(Test, test_id)
     test_instance.result_imgpath = img_name
+
+    plt.plot(t, x, label="Position")
+    plt.plot(t, p1, label="P1")
+    plt.plot(t, p2, label="P2")
+    plt.plot(t, cd, label="Cd")
+    plt.legend()
+    plt.xlabel("Time")
+    plt.savefig(f"sendes/static/{img_name}")
+
     db.session.commit()
     return img_name
-    
-    
-

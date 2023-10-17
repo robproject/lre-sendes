@@ -1,11 +1,18 @@
+<style>
+    .tr {
+        text-align:center;
+    }
+</style>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Call Function Example</title>
+    <title>LRE Orifice Calibration</title>
 </head>
 <body>
     <div>
+        <h3>Constants</h3>
         <form method="POST" action="/">
             <table>
                 <tr>
@@ -25,10 +32,14 @@
                     <td>{{ constants_form.v2l(value=constants_form.v2l.data) }}</td>
                 </tr>
             </table>
-            <div>{{ constants_form.constants_dropdown(onchange="this.form.submit()") }}</div>
+            <div>
+                {{ constants_form.constants_dropdown.label }}
+                {{ constants_form.constants_dropdown(onchange="this.form.submit()") }}
+            </div>
         </form>
     </div>
     <div>
+        <h3>LabJack Configuration</h3>
         <form method="POST" action="/">
             <table>
                 <tr>
@@ -43,13 +54,17 @@
                     <td>{{ ljconfig_form.read_count(value=ljconfig_form.read_count.data) }}</td>
                     <td>{{ ljconfig_form.stream_settling_us(value=ljconfig_form.stream_settling_us.data) }}</td>
                     <td>{{ ljconfig_form.stream_resolution_index(value=ljconfig_form.stream_resolution_index.data) }}</td>
-                    <td>{{ ljconfig_form.ain0_range(value=ljconfig_form.ain0_range.data) }}</td>
+                    <td>{{ ljconfig_form.ain0_range() }}</td>
                 </tr>
             </table>
-            <div>{{ ljconfig_form.ljconfig_dropdown(onchange="this.form.submit()") }}</div>
+            <div>
+                {{ ljconfig_form.ljconfig_dropdown.label }}
+                {{ ljconfig_form.ljconfig_dropdown(onchange="this.form.submit()") }}
+                <p>Be sure to update AIN0 Range manually upon config selection</p>
+            </div>
         </form>
     </div>
-    <div class='container'>
+    <div class='container', style="margin:auto;">
         <h3>Test</h3>
         <form method="POST" action="/">
             <!-- For constants_form -->
@@ -67,15 +82,41 @@
             <input type="hidden" name="ljconfig_stream_resolution_index_hidden" id="ljconfig_stream_resolution_index_hidden">
             <input type="hidden" name="ljconfig_ain0_range_hidden" id="ljconfig_ain0_range_hidden">
 
+            <!-- for dropdowns -->
+            <input type="hidden" id="constants_dropdown_hidden" name="constants_dropdown_hidden">
+            <input type="hidden" id="ljconfig_dropdown_hidden" name="ljconfig_dropdown_hidden">
+            <input type="hidden" id="test_dropdown_hidden" name="test_dropdown_hidden">
+
             {{ test_form.submit() }}
         </form>
     </div>
+    {% if test_instance is not none %}
+    <div>
+        <table>
+            <tr>
+                <th>Cd</th>
+                <th>Start Time</th>
+                <th>End Time</th>
+                <th>Duration</th>
+                <th>Actual Scan Rate</th>
+            </tr>
+            <tr>
+                <td>{{ test_instance.cd }}</td>
+                <td>{{ test_instance.start }}</td>
+                <td>{{ test_instance.end }}</td>
+                <td>{{ test_instance.duration }}s</td>
+                <td>{{ test_instance.scan_rate_actual }}hz</td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
     <div>
         <img src="{{ url_for('static', filename=plot_path)}}" alt="System result chart">
     </div>
     <div>
         <form method="POST" action="/">
-        {{ result_form.test_dropdown(onchange="this.form.submit()") }}
+            {{ result_form.test_dropdown.label }}
+            {{ result_form.test_dropdown(onchange="this.form.submit()") }}
         </form>
     </div>
     <script>
@@ -94,6 +135,12 @@
             document.getElementById('ljconfig_stream_settling_us_hidden').value = document.querySelector('[name="stream_settling_us"]').value;
             document.getElementById('ljconfig_stream_resolution_index_hidden').value = document.querySelector('[name="stream_resolution_index"]').value;
             document.getElementById('ljconfig_ain0_range_hidden').value = document.querySelector('[name="ain0_range"]').value;
+
+            // For dropdowns
+            document.getElementById('constants_dropdown_hidden').value = document.querySelector('[name="constants_dropdown"]').value;
+            document.getElementById('ljconfig_dropdown_hidden').value = document.querySelector('[name="ljconfig_dropdown"]').value;
+            document.getElementById('test_dropdown_hidden').value = document.querySelector('[name="test_dropdown"]').value;
+
         });
 
     </script>
