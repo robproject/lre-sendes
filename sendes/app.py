@@ -128,10 +128,10 @@ with app.app_context():
 
 class ConstantsForm(FlaskForm):
     id = HiddenField(default=1)
-    piston_rad = FloatField("Piston ID Radius", default=0.3)
+    piston_rad = FloatField("Piston Radius (Inner)", default=0.3)
     orifice_id = FloatField("Orifice ID", default=0.0127)
     rho = FloatField("Water Density Constant", default=1000)
-    downstream_id = FloatField("Downstream pip ID", default=0.0254)
+    downstream_id = FloatField("Downstream Pipe ID", default=0.0254)
     v2p = FloatField("AIN Voltage to Pressure Scalar", default=1.885e-6)
     v2l = FloatField("AIN Voltage to Length Scalar", default=0.2032)
     constants_dropdown = SelectField("Select Constants")
@@ -274,13 +274,14 @@ def index():
         else:
             plot_path = "favicon/lre.png"
 
-    test_instance = {
-        "start": f"{test_instance.start[:-4]}",
-        "end": f"{test_instance.end[:-4]}",
-        "duration": f"{test_instance.duration[:-4]}",
-        "scan_rate_actual": f"{test_instance.scan_rate_actual:.1f}",
-        "cd": f"{test_instance.cd:0.3f}",
-    }
+    if test_instance:
+        test_instance = {
+            "start": f"{test_instance.start[:-4]}",
+            "end": f"{test_instance.end[:-4]}",
+            "duration": f"{test_instance.duration[:-4]}",
+            "scan_rate_actual": f"{test_instance.scan_rate_actual:.1f}",
+            "cd": f"{test_instance.cd:0.3f}",
+        }
     template_dict = {
         "constants_form": constants_form,
         "ljconfig_form": ljconfig_form,
@@ -594,6 +595,7 @@ def generate_plot(test_id):
     test_instance = db.session.get(Test, test_id)
     test_instance.result_imgpath = img_name
 
+    plt.clf()
     plt.plot(t, x, label="Position")
     plt.plot(t, p1, label="P1")
     plt.plot(t, p2, label="P2")
