@@ -10,10 +10,16 @@ from wtforms.validators import DataRequired, NumberRange
 
 from datetime import datetime
 import sys
+import os
 from labjack import ljm
 import numpy as np
+import matplotlib.pyplot as plt
+
+IMG_FOLDER = os.path.join('sendes', 'assets')
+
 
 app = Flask(__name__)
+app.config['PNG_FOLDER'] = IMG_FOLDER
 
 
 class Base(DeclarativeBase):
@@ -63,7 +69,14 @@ class Ljconfig(db.Model):
     tests: Mapped[List["Test"]] = relationship()
 
     __table_args__ = (
-        db.UniqueConstraint("scan_rate", "buffer_size", name="uq_ljconfig"),
+        db.UniqueConstraint(
+            "scan_rate",
+            "read_count",
+            "ain0_range",
+            "stream_settling_us",
+            "stream_resolution_index",
+            name="uq_ljconfig",
+        ),
     )
 
 
@@ -74,6 +87,7 @@ class Test(db.Model):
     duration: Mapped[str] = mapped_column(db.Text)
     scan_rate_actual: Mapped[float] = mapped_column(db.Float)
     cd: Mapped[float] = mapped_column(db.Float)
+    result_imgpath: Mapped[str] = mapped_column(db.String)
     ljconfig_id: Mapped[int] = mapped_column(db.ForeignKey("ljconfig.id"))
     constants_id: Mapped[int] = mapped_column(db.ForeignKey("constants.id"))
     stream_reads: Mapped[List["StreamRead"]] = relationship()
@@ -104,12 +118,9 @@ class Result(db.Model):
     p1: Mapped[float] = mapped_column(db.Float)
     p2: Mapped[float] = mapped_column(db.Float)
     cd: Mapped[float] = mapped_column(db.Float)
-    img_path: Mapped[str] = mapped_column(db.String)
 
     test_id: Mapped[int] = mapped_column(db.ForeignKey("test.id"))
-    constants_id: Mapped[int] = mapped_column(db.ForeignKey("constants.id"))
 
-    __table_args__ = (db.UniqueConstraint("test_id", "constants_id", name="uq_result"),)
 
 
 with app.app_context():
@@ -123,7 +134,7 @@ class ConstantsForm(FlaskForm):
     rho = FloatField("Water Density Constant", default=1000)
     downstream_id = FloatField("Downstream pip ID", default=0.0254)
     v2p = FloatField("AIN Voltage to Pressure Scalar", default=1.885e-6)
-    v2l = FloatField("AIN Voltage to Length Scalar",default=0.2032)
+    v2l = FloatField("AIN Voltage to Length Scalar", default=0.2032)
     constants_dropdown = SelectField("Select Constants")
 
 
@@ -190,9 +201,12 @@ def index():
     result_form.test_dropdown.choices = [
         f"{t.id} {t.constants_id} {t.ljconfig_id}" for t in recent_tests
     ]
+    plot_path = "/"
     if "test_dropdown" in request.form:
         # render test
-        test_instance = db.session.get(Test, result_form.test_dropdown.data.split(" ")[0])
+        test_instance = db.session.get(
+            Test, result_form.test_dropdown.data.split(" ")[0]
+        )
         ljconfig = db.session.get(Ljconfig, test_instance.ljconfig_id)
         constants = db.session.get(Constants, test_instance.constants_id)
         ljconfig_form.id.data = ljconfig.id
@@ -208,6 +222,7 @@ def index():
         constants_form.downstream_id.data = constants.downstream_id
         constants_form.v2p.data = constants.v2p
         constants_form.v2l.data = constants.v2l
+        plot_path = test_instance.result_imgpath
 
     test_form = TestForm(meta={"csrf": False})
     if "submit" in request.form:
@@ -218,7 +233,10 @@ def index():
             for k, v in request.form.items()
             if k != "submit"
         }
-        test_instance = test(config_dict)
+        test_id = test(config_dict)
+        test_instance = db.session.get(Test, test_id)
+        calc_results(test_instance.id)
+        plot_path = generate_plot(test_instance.id)
         ljconfig = db.session.get(Ljconfig, test_instance.ljconfig_id)
         constants = db.session.get(Constants, test_instance.constants_id)
         ljconfig_form.id.data = ljconfig.id
@@ -240,6 +258,7 @@ def index():
         "ljconfig_form": ljconfig_form,
         "test_form": test_form,
         "result_form": result_form,
+        "plot_path": plot_path
     }
     return render_template("index.html", **template_dict)
 
@@ -260,9 +279,11 @@ def test(config_dict):
         aScanList = ljm.namesToAddresses(numAddresses, aScanListNames)[0]
 
         # ljm config
-        scanRate = config_dict['scan_rate']
+        scanRate = int(config_dict["scan_rate"])
         scansPerRead = int(scanRate / 2)
-        MAX_REQUESTS = config_dict['read_count']  # The number of eStreamRead calls that will be performed.
+        MAX_REQUESTS = config_dict[
+            "read_count"
+        ]  # The number of eStreamRead calls that will be performed.
 
         # All negative channels are single-ended, AIN0 and AIN1 ranges are
         # +/-10 V, stream settling is 0 (default) and stream resolution index
@@ -274,11 +295,11 @@ def test(config_dict):
         # ljm config object creation and db save
         aConfig = {
             "AIN_ALL_NEGATIVE_CH": ljm.constants.GND,
-            "AIN0_RANGE": config_dict['ain0_range'],
+            "AIN0_RANGE": config_dict["ain0_range"],
             "AIN1_RANGE": 10.0,
             "AIN2_RANGE": 10.0,
-            "STREAM_SETTLING_US": config_dict['stream_settling_us'],
-            "STREAM_RESOLUTION_INDEX": config_dict['stream_resolution_index'],
+            "STREAM_SETTLING_US": config_dict["stream_settling_us"],
+            "STREAM_RESOLUTION_INDEX": config_dict["stream_resolution_index"],
         }
 
         ljconfig_dict = {
@@ -296,12 +317,12 @@ def test(config_dict):
             ljconfig_entry = Ljconfig.query.filter_by(**ljconfig_dict).first()
 
         # constants object creation and db save
-        piston_rad = config_dict['piston_rad']
-        orifice_id = config_dict['orifice_id']
-        downstream_id = config_dict['downstream_id']
-        v2p = config_dict['v2p']
-        v2l = config_dict['v2l']
-        rho = config_dict['rho']
+        piston_rad = config_dict["piston_rad"]
+        orifice_id = config_dict["orifice_id"]
+        downstream_id = config_dict["downstream_id"]
+        v2p = config_dict["v2p"]
+        v2l = config_dict["v2l"]
+        rho = config_dict["rho"]
 
         constants_dict = {
             "piston_rad": piston_rad,
@@ -341,6 +362,7 @@ def test(config_dict):
             test_entry = Test(
                 start=start.isoformat(),
                 cd=0.0,
+                result_imgpath='/',
                 scan_rate_actual=0.0,
                 end="test incomplete",
                 duration="test incomplete",
@@ -451,9 +473,10 @@ def test(config_dict):
 
         # Close handle
         ljm.close(handle)
+        return test_entry.id
 
 
-def get_results(test_id):
+def calc_results(test_id):
     ## constants default to test if not specified
     # constants_id
     scans = (
@@ -463,8 +486,8 @@ def get_results(test_id):
         .all()
     )
     # get configs for calculating cd values
-    test = db.session.get(Test, test_id)
-    constants = db.session.get(Constants, test.constants_id)
+    test_instance = db.session.get(Test, test_id)
+    constants = db.session.get(Constants, test_instance.constants_id)
 
     # window of scans to output 100 result points
     result_objects = []
@@ -475,7 +498,7 @@ def get_results(test_id):
             "p1": np.average([scan.ain0 for scan in window]),
             "p2": np.average([scan.ain1 for scan in window]),
             "x": np.average(np.diff([scan.ain2 for scan in window])),
-            "t": window_size * 1 / test.scan_rate_actual,
+            "t": window_size * 1 / test_instance.scan_rate_actual,
             "test_id": test_id,
         }
 
@@ -484,9 +507,9 @@ def get_results(test_id):
     db.session.execute(db.insert(Result), result_objects)
 
     # update test with averaged cd
-    test.cd = np.average([r["cd"] for r in result_objects])
+    test_instance.cd = np.average([r["cd"] for r in result_objects])
     db.session.commit()
-    return test
+    generate_plot
 
 
 def get_cd(r: dict, c: Constants):
@@ -505,8 +528,32 @@ def get_cd(r: dict, c: Constants):
     return cd
 
 
-def get_plot(test_id):
-    pass
-    ## constants default to test if not specified
-    # constants_id =
-    # results = Result.query.filter(Result.test_id==test_id and )
+def generate_plot(test_id):
+    results = Result.query.filter_by(test_id=test_id).all()
+    t = []
+    ts = 0
+    x = []
+    p1 = []
+    p2 = []
+    cd = []
+    for i, r in enumerate(results):
+        t.append(ts)
+        ts+=r.t
+        x.append(r.x)
+        p1.append(r.p1)
+        p2.append(r.p2)
+        cd.append(r.cd)
+
+    plt.plot(t, x)
+    plt.plot(t, p1)
+    plt.plot(t, p2)
+    plt.plot(t, cd)
+    img_name = f"{test_id}.png"
+    plt.savefig(f"static/{img_name}")
+    test_instance = db.session.get(Test,test_id)
+    test_instance.result_imgpath = img_name
+    db.session.commit()
+    return img_name
+    
+    
+

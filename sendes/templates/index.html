@@ -71,6 +71,9 @@
         </form>
     </div>
     <div>
+        <img src="{{ url_for('static', filename=plot_path)}}" alt="System result chart">
+    </div>
+    <div>
         <form method="POST" action="/">
         {{ result_form.test_dropdown(onchange="this.form.submit()") }}
         </form>
