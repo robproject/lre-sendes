@@ -10,7 +10,7 @@
             "request": "launch",
             "module": "flask",
             "env": {
-                "FLASK_APP": "sendes/page",
+                "FLASK_APP": "sendes/app",
                 "FLASK_DEBUG": "1"
             },
             "args": [

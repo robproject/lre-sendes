@@ -6,5 +6,9 @@
             "name": "lre-download",
             "database": "/Users/robir/Downloads/sendes.db"
         }
-    ]
+    ],
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "python.formatting.provider": "none"
 }
