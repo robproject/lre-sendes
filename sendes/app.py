@@ -84,7 +84,7 @@ class Test(db.Model):
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
     start: Mapped[str] = mapped_column(db.Text)
     end: Mapped[str] = mapped_column(db.Text)
-    duration: Mapped[str] = mapped_column(db.Text)
+    duration: Mapped[float] = mapped_column(db.Float)
     scan_rate_actual: Mapped[float] = mapped_column(db.Float)
     cd: Mapped[float] = mapped_column(db.Float)
     result_imgpath: Mapped[str] = mapped_column(db.String)
@@ -281,7 +281,7 @@ def index():
         test_instance = {
             "start": f"{test_instance.start[:-4]}",
             "end": f"{test_instance.end[:-4]}",
-            "duration": f"{test_instance.duration[:-4]}",
+            "duration": f"{test_instance.duration:.2f}",
             "scan_rate_actual": f"{test_instance.scan_rate_actual:.1f}",
             "cd": f"{test_instance.cd:0.3f}",
         }
@@ -399,7 +399,7 @@ def execute_test(config_dict):
 
                 ret = ljm.eStreamRead(handle)
 
-                if i == 1:
+                if i == 1 and ret[0]:
                     # commit constant and config entries
                     try:
                         db.session.add(constants_entry)
@@ -425,7 +425,7 @@ def execute_test(config_dict):
                         result_imgpath="/",
                         scan_rate_actual=0.0,
                         end="test incomplete",
-                        duration="test incomplete",
+                        duration=0,
                         ljconfig_id=ljconfig_entry.id,
                         constants_id=constants_entry.id,
                     )
