@@ -37,7 +37,7 @@ ds = convpres(ds_p, 'psi', 'Pa');
 
 % Define nominal values and uncertainties for variables
 nominal_values = struct('Dc', piston_dia, 'dx', dx, 'D1', d1, 'D2', d2, 'rho', 1000, 'P1', us, 'P2', ds);
-uncertainties = struct('Dc', micrometer, 'dx', adc, 'D1', micrometer, 'D2', micrometer, 'rho', 0, 'P1', transducer, 'P2', transducer);
+uncertainties = struct('Dc', micrometer, 'dx', adc, 'D1', micrometer, 'D2', micrometer, 'rho', 0.03, 'P1', transducer, 'P2', transducer);
 
 % Generate N random samples for each variable, assuming a normal distribution
 fields = fieldnames(nominal_values);

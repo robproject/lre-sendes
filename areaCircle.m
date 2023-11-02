@@ -1,4 +1,5 @@
 %% Area of a Circle w/ Diameter
-function y = calcArea(d)
-y=d*d*pi*1/4;
+
+function y = areaCircle(d)
+y=d*d*pi*1/4; % only with diameter
 end

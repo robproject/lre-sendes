@@ -50,7 +50,7 @@ get_elasticities('Cd', Cd, vars)
 
 vars = ["D2", "D1", "Di", "rho", "cP", "xf", "xi", "tf", "ti"];
 syms(vars(:));
-`Cd = 4*(Di/2)^2 * (xf-xi)/(tf-ti) * D2^(-2) * (2* cP * (rho * (1-(D2/D1)^4))^(-1))^(-1/2);
+Cd = 4*(Di/2)^2 * (xf-xi)/(tf-ti) * D2^(-2) * (2* cP * (rho * (1-(D2/D1)^4))^(-1))^(-1/2);
 
 get_elasticities('Cd', Cd, vars)
 
@@ -62,9 +62,12 @@ function get_elasticities(name, fx, vars)
 
     fprintf('%s \n', name)
     pretty(fx)
+    latex(fx)
 
     for i=1:length(vars)
         fprintf('Partial elasticity (sensitivity) of %s with respect to %s \n', name, vars(i));
         pretty(diff(fx,vars(i))/fx * vars(i));
+        disp(latex(diff(fx,vars(i))/fx * vars(i)));
+        
     end
 end
