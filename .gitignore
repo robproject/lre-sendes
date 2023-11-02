@@ -8,7 +8,6 @@ arduino/arduinio/.vscode/launch.json
 arduino/arduinio/.vscode/ipch
 
 # Editors and IDEs
-.vscode/
 *.code-workspace
 *.swp
 *.swo
@@ -21,3 +20,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# app
+instance
+static
