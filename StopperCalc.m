@@ -7,7 +7,7 @@
 % ---------------------------Vessel Force----------------------------------
 % _Inputs_
 d0=3.505; % diameter of the piston (in)
-P=100; % highest desired Pressure(psi) (lbf/in^2)
+P=50; % highest desired Pressure(psi) (lbf/in^2)
 % _Formulas_
 y=Vessel_Force(d0,P);
 % _Display_
@@ -44,7 +44,6 @@ d1_p=1.03; % inner diameter (in)
 % _formulas_
 cSA_p=areaCircle(d2_p)-areaCircle(d1_p); % Cross-Sectional Area acted on
 deformation_PVC=y*L_PVC/cSA_p/E_PVC; % deformation of PVC
-
 % _display_
 if deformation_PVC < PVC_maxDeformation
     disp('PVC is OK to use');
