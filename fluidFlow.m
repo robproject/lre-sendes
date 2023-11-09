@@ -10,7 +10,7 @@ format short
 disp('*** Successful Run ***');
 % ----------------- Output Fluid Flow -------------------------------------
 % _Inputs_
-d=0.5; % diameter of the output (in)
+d=0.238; % diameter of the output (in)
 P=50; % desired pressure (psi) (lbf/in^2)
 density=62.4; % density of fluid (lb/ft^3)
 % _Formulas_
