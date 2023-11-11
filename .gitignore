@@ -1,12 +1,3 @@
-# PlatformIO
-arduino/arduinio/*.pio
-arduino/arduinio/*.pioenvs
-arduino/arduinio/*.piolibdeps
-arduino/arduinio/.vscode/.browse.c_cpp.db*
-arduino/arduinio/.vscode/c_cpp_properties.json
-arduino/arduinio/.vscode/launch.json
-arduino/arduinio/.vscode/ipch
-
 # Editors and IDEs
 *.code-workspace
 *.swp
@@ -24,3 +15,6 @@ build/
 # app
 instance
 static
+
+# OS
+.DS_Store

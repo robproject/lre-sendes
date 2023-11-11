@@ -1,6 +1,11 @@
 % Calculator to get total value of uncertainty, given device specifications
 %% Constant Values
 
+class def VarWithU
+properties
+Value
+
+
 % Device Parameters
 
 % adc specs
@@ -54,8 +59,9 @@ dt = t2 - t1;
 
 Cd = 4*(Di/2)^2 * dx/dt * A*L/vref* D2^(-2) * (2* (P1 - P2) * (rho * (1-(D2/D1)^4))^(-1))^(-1/2);
 
-[u, ref] = get_total_uncertainty('Cd', Cd, [vars_const; vars_vol]);
+[u, ref, tex] = get_total_uncertainty('Cd', Cd, [vars_const; vars_vol]);
 fprintf('Cd with Uncertainty: %1.4f +/-%1.4f \n', [ref, u/2]);
+
 
 %% Mass Approach
 syms mf mi tf ti dm dt
@@ -97,17 +103,46 @@ dt = t2 - t1;
 Cd = (4/pi) *  dm/(dt * rho) * A * W / vref * D2^-2 * (2*(P1-P2) * (rho*(1-(D2/D1)^4))^(-1))^(-1/2);
 
 
-[u, ref] = get_total_uncertainty('Cd', Cd, [vars_const; vars_mass]);
+[u, ref, tex] = get_total_uncertainty('Cd', Cd, [vars_const; vars_mass]);
 fprintf('Cd with Uncertainty: %1.4f +/-%1.4f \n', [ref, u/2]);
 
 
-%% Functions
 
-function [u, ref] = get_total_uncertainty(name, fx, vars)
+%% Functions
+function [val, u] = u_operate(val1, u1, type1, val2, u2, type2, ret_type, op)
+    switch op
+        case '*'
+            val = val1 * val2;
+        case '/'
+            val = val1 / val2;
+        case '+'
+            val = val1 + val2;
+        case '-'
+            val = val1 - val2;
+        case '^'
+            val = val1 ^ val2;
+    end
+    if or(op == '*', op == '/')
+        
+
+
+    u_per = rssq(u_per1, u_per2);
+
+    if ret_type == 'abs'
+        u = val * u_per;
+    else
+        u = u_per;
+    end
+    end
+
+
+
+
+function [u, ref, tex] = get_total_uncertainty(name, fx, vars)
 
     fprintf('%s \n', name)
     pretty(vpa(simplify(fx),4))
-    latex(fx)
+    tex = latex(fx);
 
     % covert to syms
     for k = 1:size(vars, 1)

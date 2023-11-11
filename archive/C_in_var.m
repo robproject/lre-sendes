@@ -38,7 +38,7 @@ syms mf mi tf ti dm dt
 vars = [D1, D2, rho, mf, mi, cP, tf, ti];
 Cd = (4/pi) *  ((mf-mi)/((tf-ti) * rho)) * D2^-2 * (2*(cP) * (rho*(1-(D2/D1)^4))^(-1))^(-1/2);
 
-get_elasticities('Cd', Cd, vars)
+get_elasticitiesun('Cd', Cd, vars)
 
 %% Volume Approach
 
