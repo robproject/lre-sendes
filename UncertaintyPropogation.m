@@ -4,40 +4,69 @@ clearvars; close all; clc;
 % Value, Uncertainty, and Percentage accessible at UObj.V, UObj.U, and
 % UObj.P
 
-% timer and potentiometer uncertainty
-timer = 1.6522e-8; % seconds
+% uncertainties and constants
 
-rho = 1000;
 
-v_in_const = 7.853;
-in2m = 1/39.3701;
-psi2pa = 6894.76;
-p1_slope = .9977953;
-p1_offset = -.008752722;
-p2_slope = 1.002007;
-p2_offset = .1061045;
+rho = 1000; % kg/m3
 
-pd = UObj( 3.505, .002284631); % inches
-vx2 = UObj( .000908753, 6.08881e-5); % voltage
-vx1 = UObj( .000000001, 6.08881e-5); % voltage
-t2 = UObj( 1/267, timer); % 1/267 s = sample period
-t1 = UObj( .0000000001, timer *1e-20); % 0s
-d2 = UObj( .238, 7.84915e-4); % inches
-d1 = UObj( .618, .001129); % inches
-vp2 = UObj( 0.471, .007436709); % voltage
-vp1 = UObj( 0.9451257, .007120869); % voltage
+pot_slope = 7.853; % inches per volt
+in2m = 0.0254;  % meters per inch
+psi2pa = 6894.76;  % pascals per psi
+p1_slope = .9977953; % xducer cal sheet - C01AB psi slope
+p1_offset = -.008752722; % xducer cal sheet - C01AB psi offset
+p2_slope = 1.002007; % xducer cal sheet - C30AB psi slope
+p2_offset = .1061045; % xducer cal sheet - C30AB psi offset
+xducer_read_range = 200; % psi
+xducer_output_range = .02 - .004; % 4-20mA
+xducer_nominal_slope = xducer_read_range / xducer_output_range; % 12.5psi/mA
+ljtick_gain = 20;
+ljtick_shunt = 5.9; % ohms
+ljtick_scalar = ljtick_gain * ljtick_shunt; % resistance; V/I
+
+ % sample_period = 1/267; piston_rate = .242637;
+sample_period = 1/267; piston_rate = 2.64; % period s, rate in/s
+u_clock_tick = 1.6522e-8; % seconds
+
+
+% nominal pot voltage given piston rate and desired sample period
+pot_dv = @(period, rate) period * rate * 1/pot_slope; % volts traveled = s * in/s * v/in
+potentiometer_distance_per_sample_as_voltage = pot_dv(sample_period, piston_rate);  
+fprintf('Potentiometer dV per sample: %g\n\n', potentiometer_distance_per_sample_as_voltage)
+
+
+p1_pressure = 50; p2_pressure = 0;
+% nominal potentiometer voltages given desired pressures
+% ((psi - psi)/scalar * A/psi + A) * V/A
+xducer_reading = @(psi, slope, offset) ((psi-offset)/slope /xducer_nominal_slope + .004) * ljtick_scalar;
+p1_read = xducer_reading(p1_pressure, p1_slope, p1_offset);
+p2_read = xducer_reading(p2_pressure, p2_slope, p2_offset);
+
+% parameter object initialization: nominal and absolute uncertain values
+pd  = UObj( 3.505, .002284631); % inches
+% voltage, as in middle of range (+.4v) for less relative uncertainty
+vx2 = UObj( .4+potentiometer_distance_per_sample_as_voltage, 6.08881e-5); 
+vx1 = UObj( .4+.00000001, 6.08881e-5); % voltage
+t2  = UObj( sample_period, u_clock_tick); % 1/267 s = sample period
+t1  = UObj( .0000000001, u_clock_tick *1e-20); % 0s
+d2  = UObj( .238, 7.84915e-4); % inches
+d1  = UObj( .618, .001129); % inches
+vp1 = UObj( p1_read, .007120869); % voltage
+vp2 = UObj( p2_read, .007436709); % voltage
+
+
+
 
 %% Direct Calculation
 % pressure = ((((voltage * 118) - .004) * 12500 * slope) + offset) * psi2pa
-% (((volts / ohms) - amps) * psi/amps) * pascals/psi = pascals
-pres = @(v_uobj, slope, offset) v_uobj.mul(1/118).add(-.004).mul(12500*slope).add(offset).mul(psi2pa);
+% (((volts / ohms) - amps) * psi/amps*psi_scalar) + psi_offset * pascals/psi = pascals
+pres = @(v_uobj, slope, offset) v_uobj.mul(1/ljtick_scalar).add(-.004).mul(xducer_nominal_slope).mul(slope).add(offset).mul(psi2pa);
 
 p1 = pres(vp1, p1_slope, p1_offset);
 p2 = pres(vp2, p2_slope, p2_offset);
 
 % position = voltage * in/v * m/in = m
-x1 = vx1.mul(v_in_const).mul(in2m);
-x2 = vx2.mul(v_in_const).mul(in2m);
+x1 = vx1.mul(pot_slope).mul(in2m);
+x2 = vx2.mul(pot_slope).mul(in2m);
 
 % top left pd/2 ^2 * 4 = m ^2
 pd_term = pd.mul(1/2*in2m).pwr(2).mul(4);
@@ -76,19 +105,21 @@ X1 = x1; X2 = x2; T1 = t1; T2 = t2; P1 = p1; P2 = p2; D1 = d1; D2 = d2; RHO = rh
 vals = [X1.V X2.V T1.V T2.V P1.V P2.V D1.V D2.V RHO R.V];
 u_vals = [X1.U X2.U T1.U T2.U P1.U P2.U D1.U D2.U 0 R.U];
 
-figure()
+figure('Name', 'Relative Uncertainty per Parameter')
 sym_strs = ["x1" "x2" "t1" "t2" "p1" "p2" "d1" "d2" "rho" "r"];
 % plotting relative uncertainty per variable
 bar(sym_strs,u_vals./vals)
 xlabel('Variable')
 ylabel('Relative Uncertainty, %')
 
+
+
 %% Symbolic Substitution
 syms(sym_strs);
 sym_chars = [x1 x2 t1 t2 p1 p2 d1 d2 rho r];
 
 umf_syms = sym.empty;
-u_propogated = [];
+u_propogated = zeros(1,length(umf_syms));
 
 cd = 4 * r^2 * (x2 - x1) / (t2 - t1) * d2^-2 * (2 * (p1 - p2) / (rho * (1- (d2 / d1)^4)))^(-1/2);
 
@@ -96,7 +127,6 @@ for i = 1:length(vals)
     umf_syms(i) = simplify(diff(cd, sym_chars(i)) * sym_chars(i)/cd);
     u_propogated(i) = eval(subs(umf_syms(i), sym_chars, vals)) * u_vals(i)/vals(i);
 end
-
 
 
 cd_ur = rssq(u_propogated);
@@ -108,11 +138,14 @@ fprintf([...
     'Substituted CD Uncertainty Percentage: %.2f%%\n\n'], ...
      cd_v, cd_ur*cd_v, cd_ur*100)
 
-figure()
+fsym = figure('Name','Relative Uncertainty wrt Cd');
 % plotting relative uncertainty with respect to CD, per variable
 bar(sym_strs, u_propogated)
 xlabel('Variable')
 ylabel('Relative Uncertainty wrt Cd, %')
+fsym.Position = fsym.Position + [600, 0, 0, 0];
+
+
 
 %% Monte Carlo
 cd_vals = zeros(1,10);
