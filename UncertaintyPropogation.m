@@ -80,6 +80,8 @@ figure()
 sym_strs = ["x1" "x2" "t1" "t2" "p1" "p2" "d1" "d2" "rho" "r"];
 % plotting relative uncertainty per variable
 bar(sym_strs,u_vals./vals)
+xlabel('Variable')
+ylabel('Relative Uncertainty, %')
 
 %% Symbolic Substitution
 syms(sym_strs);
@@ -109,6 +111,8 @@ fprintf([...
 figure()
 % plotting relative uncertainty with respect to CD, per variable
 bar(sym_strs, u_propogated)
+xlabel('Variable')
+ylabel('Relative Uncertainty wrt Cd, %')
 
 %% Monte Carlo
 cd_vals = zeros(1,10);
