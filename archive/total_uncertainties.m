@@ -1,9 +1,6 @@
 % Calculator to get total value of uncertainty, given device specifications
 %% Constant Values
 
-class def VarWithU
-properties
-Value
 
 
 % Device Parameters
@@ -109,34 +106,6 @@ fprintf('Cd with Uncertainty: %1.4f +/-%1.4f \n', [ref, u/2]);
 
 
 %% Functions
-function [val, u] = u_operate(val1, u1, type1, val2, u2, type2, ret_type, op)
-    switch op
-        case '*'
-            val = val1 * val2;
-        case '/'
-            val = val1 / val2;
-        case '+'
-            val = val1 + val2;
-        case '-'
-            val = val1 - val2;
-        case '^'
-            val = val1 ^ val2;
-    end
-    if or(op == '*', op == '/')
-        
-
-
-    u_per = rssq(u_per1, u_per2);
-
-    if ret_type == 'abs'
-        u = val * u_per;
-    else
-        u = u_per;
-    end
-    end
-
-
-
 
 function [u, ref, tex] = get_total_uncertainty(name, fx, vars)
 
