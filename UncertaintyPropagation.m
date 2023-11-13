@@ -94,7 +94,7 @@ cd_den = d2_term.u_mul(rad_term);
 
 CD = cd_num.u_div(cd_den);
 
-fprintf('Direct CD:      %.3f ±%.3f, %.2f%%\n', CD.V, CD.U, CD.U/CD.V*100)
+fprintf('Direct CD:      %.3f ±%.2f%%\n', CD.V, CD.U/CD.V*100)
 X1 = x1; X2 = x2; T1 = t1; T2 = t2; P1 = p1; P2 = p2; D1 = d1; D2 = d2; RHO = rho; R = pd.mul(1/2);
 vals = [X1.V X2.V T1.V T2.V P1.V P2.V D1.V D2.V RHO R.V];
 u_vals = [X1.U X2.U T1.U T2.U P1.U P2.U D1.U D2.U 0 R.U];
@@ -135,7 +135,7 @@ end
 cd_v = eval(subs(cd, sym_chars, vals));
 cd_ur = rssq(u_propagated);
 
-fprintf('Substituted CD: %.3f ±%.3f, %.2f%%\n', cd_v, cd_ur*cd_v, cd_ur*100)
+fprintf('Substituted CD: %.3f ±%.2f%%\n', cd_v, cd_ur*100)
 
 fsym = figure('Name','Relative Uncertainty wrt Cd');
 % plotting relative uncertainty with respect to CD, per variable
@@ -153,5 +153,7 @@ for i=1:iters
     cd_vals(i) = eval(subs(cd, sym_chars, rand_vals(i,:)));
 end
 
-fprintf('Monte Carlo CD: %.3f ±%.3f, %.2f%%\n\n',...
-    mean(cd_vals), std(cd_vals), abs(std(cd_vals)/mean(cd_vals)*100));
+stdcdmc = std(cd_vals);
+mcdmc = mean(cd_vals);
+fprintf('Monte Carlo CD: %.3f ±%.2f%%\n\n',...
+   mcdmc, stdcdmc/mcdmc*100);
