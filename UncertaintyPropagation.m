@@ -4,11 +4,12 @@ clearvars; close all; clc;
 % Value, Uncertainty, and Percentage accessible at UObj.V, UObj.U, and
 % UObj.P
 
-% uncertainties and constants
+% constants
 rho = 1000; % kg/m3
 in2m = 0.0254;  % meters per inch
 psi2pa = 6894.76;  % pascals per psi
 
+% calibration constants
 pot_slope = 7.853; % inches per volt potentiometer calibration
 
 p1_slope = .9977953; % xducer cal sheet - C01AB psi slope
@@ -23,12 +24,11 @@ ljtick_gain = 20; % op-amp on ljtick
 ljtick_shunt = 5.9; % ohms
 ljtick_scalar = ljtick_gain * ljtick_shunt; % resistance; V/I = 118
 
- % sample_period = 1/267; piston_rate = .242637;
-sample_period = 1/267; piston_rate = 2.64; % period s, rate in/s
-u_clock_tick = 1.6522e-8; % seconds
-
+% sample_period = 1/267; piston_rate = .242637;
+sample_period = 1/267; piston_rate = 2.89; % period s, rate in/s
 % nominal pot voltage given piston rate and desired sample period
-pot_dv = @(period, rate) period * rate * 1/pot_slope; % volts traveled = s * in/s * v/in
+% volts traveled = s * in/s * v/in
+pot_dv = @(period, rate) period * rate * 1/pot_slope;
 potentiometer_distance_per_sample_as_voltage = pot_dv(sample_period, piston_rate);  
 fprintf('Potentiometer dV per sample: %g\n\n', potentiometer_distance_per_sample_as_voltage)
 
@@ -38,6 +38,9 @@ p1_pressure = 50; p2_pressure = 0;
 xducer_reading = @(psi, slope, offset) ((psi-offset)/slope /xducer_nominal_slope + .004) * ljtick_scalar;
 p1_read = xducer_reading(p1_pressure, p1_slope, p1_offset);
 p2_read = xducer_reading(p2_pressure, p2_slope, p2_offset);
+
+% clock tick uncertainty
+u_clock_tick = 1.6522e-8; % seconds
 
 % parameter object initialization: nominal and absolute uncertain values
 pd  = UObj( 3.505, .002284631).mul(in2m); % inches -> meters
@@ -144,7 +147,7 @@ fsym.Position = fsym.Position + [600, 0, 0, 0];
 
 %% Monte Carlo
 cd_vals = zeros(1,10);
-iters = 1000;
+iters = 100;
 rand_vals = vals + u_vals.*randn(iters,length(vals));
 for i=1:iters
     cd_vals(i) = eval(subs(cd, sym_chars, rand_vals(i,:)));
