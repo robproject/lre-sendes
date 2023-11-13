@@ -27,12 +27,10 @@ ljtick_scalar = ljtick_gain * ljtick_shunt; % resistance; V/I = 118
 sample_period = 1/267; piston_rate = 2.64; % period s, rate in/s
 u_clock_tick = 1.6522e-8; % seconds
 
-
 % nominal pot voltage given piston rate and desired sample period
 pot_dv = @(period, rate) period * rate * 1/pot_slope; % volts traveled = s * in/s * v/in
 potentiometer_distance_per_sample_as_voltage = pot_dv(sample_period, piston_rate);  
 fprintf('Potentiometer dV per sample: %g\n\n', potentiometer_distance_per_sample_as_voltage)
-
 
 p1_pressure = 50; p2_pressure = 0;
 % nominal potentiometer voltages given desired pressures
@@ -62,6 +60,7 @@ p2 = pres(vp2, p2_slope, p2_offset);
 % position = voltage * in/v * m/in = m
 x1 = vx1.mul(pot_slope).mul(in2m);
 x2 = vx2.mul(pot_slope).mul(in2m);
+
 
 %% Direct Calculation
 
@@ -100,10 +99,9 @@ u_vals = [X1.U X2.U T1.U T2.U P1.U P2.U D1.U D2.U 0 R.U];
 figure('Name', 'Relative Uncertainty per Parameter')
 sym_strs = ["x1" "x2" "t1" "t2" "p1" "p2" "d1" "d2" "rho" "r"];
 % plotting relative uncertainty per variable
-bar(sym_strs,u_vals./vals)
+bar(sym_strs,u_vals./vals*100)
 xlabel('Variable')
 ylabel('Relative Uncertainty, %')
-
 
 
 %% Symbolic Substitution
@@ -113,39 +111,40 @@ sym_chars = [x1 x2 t1 t2 p1 p2 d1 d2 rho r];
 umf_syms = sym.empty;
 u_propagated = zeros(1,length(umf_syms));
 
-cd = 4 * r^2 * ... % pd term
-    (x2 - x1) / (t2 - t1) * ... % dxdt term
-    d2^-2 * ... % d2 term
-    (...
-        2 * (p1 - p2) / ...
-        (...
-            rho * (1 - (d2 / d1)^4)...
-        )...
-    )^(-1/2);
+cd = ...
+    4 * r^2 * ...               pd term   \ numerator
+    (x2 - x1) / (t2 - t1) / ... dxdt term /
+    (...                                                 \denominator
+        d2^2 * ...                 d2 term                |
+        sqrt(...                                          |
+                2 * (p1 - p2) / ...     rad num term      |  
+            (...                                          |
+                rho * (1 - (d2 / d1)^4)... rad den term   |
+            )...                                          |
+        )...                                              |
+    );                                                   %/
 
 for i = 1:length(vals)
     umf_syms(i) = simplify(diff(cd, sym_chars(i)) * sym_chars(i)/cd);
     u_propagated(i) = eval(subs(umf_syms(i), sym_chars, vals)) * u_vals(i)/vals(i);
 end
 
-
-cd_ur = rssq(u_propagated);
 cd_v = eval(subs(cd, sym_chars, vals));
+cd_ur = rssq(u_propagated);
 
 fprintf('Substituted CD: %.3f ±%.3f, %.2f%%\n', cd_v, cd_ur*cd_v, cd_ur*100)
 
 fsym = figure('Name','Relative Uncertainty wrt Cd');
 % plotting relative uncertainty with respect to CD, per variable
-bar(sym_strs, u_propagated)
+bar(sym_strs, u_propagated*100)
 xlabel('Variable')
 ylabel('Relative Uncertainty wrt Cd, %')
 fsym.Position = fsym.Position + [600, 0, 0, 0];
 
 
-
 %% Monte Carlo
 cd_vals = zeros(1,10);
-iters = 100;
+iters = 1000;
 rand_vals = vals + u_vals.*randn(iters,length(vals));
 for i=1:iters
     cd_vals(i) = eval(subs(cd, sym_chars, rand_vals(i,:)));
@@ -153,11 +152,3 @@ end
 
 fprintf('Monte Carlo CD: %.3f ±%.3f, %.2f%%\n\n',...
     mean(cd_vals), std(cd_vals), abs(std(cd_vals)/mean(cd_vals)*100));
-
-
-
-
-
-
-
-
