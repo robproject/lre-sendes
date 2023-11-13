@@ -1,0 +1,148 @@
+<style>
+    .tr {
+        text-align:center;
+    }
+</style>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LRE Orifice Calibration</title>
+</head>
+<body>
+    <div>
+        <h3>Constants</h3>
+        <form method="POST" action="/">
+            <table>
+                <tr>
+                    <th>{{ constants_form.piston_rad.label }}</th>
+                    <th>{{ constants_form.orifice_id.label }}</th>
+                    <th>{{ constants_form.rho.label }}</th>
+                    <th>{{ constants_form.downstream_id.label }}</th>
+                    <th>{{ constants_form.v2p.label }}</th>
+                    <th>{{ constants_form.v2l.label }}</th>
+                </tr>
+                <tr>
+                    <td>{{ constants_form.piston_rad(value=constants_form.piston_rad.data) }}</td>
+                    <td>{{ constants_form.orifice_id(value=constants_form.orifice_id.data) }}</td>
+                    <td>{{ constants_form.rho(value=constants_form.rho.data) }}</td>
+                    <td>{{ constants_form.downstream_id(value=constants_form.downstream_id.data) }}</td>
+                    <td>{{ constants_form.v2p(value=constants_form.v2p.data) }}</td>
+                    <td>{{ constants_form.v2l(value=constants_form.v2l.data) }}</td>
+                </tr>
+            </table>
+            <div>
+                {{ constants_form.constants_dropdown.label }}
+                {{ constants_form.constants_dropdown(onchange="this.form.submit()") }}
+            </div>
+        </form>
+    </div>
+    <div>
+        <h3>LabJack Configuration</h3>
+        <form method="POST" action="/">
+            <table>
+                <tr>
+                    <th>{{ ljconfig_form.scan_rate.label }}</th>
+                    <th>{{ ljconfig_form.read_count.label }}</th>
+                    <th>{{ ljconfig_form.stream_settling_us.label }}</th>
+                    <th>{{ ljconfig_form.stream_resolution_index.label }}</th>
+                    <th>{{ ljconfig_form.ain0_range.label }}</th>
+                </tr>
+                <tr>
+                    <td>{{ ljconfig_form.scan_rate(value=ljconfig_form.scan_rate.data) }}</td>
+                    <td>{{ ljconfig_form.read_count(value=ljconfig_form.read_count.data) }}</td>
+                    <td>{{ ljconfig_form.stream_settling_us(value=ljconfig_form.stream_settling_us.data) }}</td>
+                    <td>{{ ljconfig_form.stream_resolution_index(value=ljconfig_form.stream_resolution_index.data) }}</td>
+                    <td>{{ ljconfig_form.ain0_range() }}</td>
+                </tr>
+            </table>
+            <div>
+                {{ ljconfig_form.ljconfig_dropdown.label }}
+                {{ ljconfig_form.ljconfig_dropdown(onchange="this.form.submit()") }}
+                <p>Be sure to update AIN0 Range manually upon config selection</p>
+            </div>
+        </form>
+    </div>
+    <div class='container', style="margin:auto;">
+        <h3>Test</h3>
+        <form method="POST" action="/">
+            <!-- For constants_form -->
+            <input type="hidden" name="constants_piston_rad_hidden" id="constants_piston_rad_hidden">
+            <input type="hidden" name="constants_orifice_id_hidden" id="constants_orifice_id_hidden">
+            <input type="hidden" name="constants_rho_hidden" id="constants_rho_hidden">
+            <input type="hidden" name="constants_downstream_id_hidden" id="constants_downstream_id_hidden">
+            <input type="hidden" name="constants_v2p_hidden" id="constants_v2p_hidden">
+            <input type="hidden" name="constants_v2l_hidden" id="constants_v2l_hidden">
+
+            <!-- For ljconfig_form -->
+            <input type="hidden" name="ljconfig_scan_rate_hidden" id="ljconfig_scan_rate_hidden">
+            <input type="hidden" name="ljconfig_read_count_hidden" id="ljconfig_read_count_hidden">
+            <input type="hidden" name="ljconfig_stream_settling_us_hidden" id="ljconfig_stream_settling_us_hidden">
+            <input type="hidden" name="ljconfig_stream_resolution_index_hidden" id="ljconfig_stream_resolution_index_hidden">
+            <input type="hidden" name="ljconfig_ain0_range_hidden" id="ljconfig_ain0_range_hidden">
+
+            <!-- for dropdowns -->
+            <input type="hidden" id="constants_dropdown_hidden" name="constants_dropdown_hidden">
+            <input type="hidden" id="ljconfig_dropdown_hidden" name="ljconfig_dropdown_hidden">
+            <input type="hidden" id="test_dropdown_hidden" name="test_dropdown_hidden">
+
+            {{ test_form.submit() }}
+        </form>
+    </div>
+    {% if test_instance is not none %}
+    <div>
+        <table>
+            <tr>
+                <th>Cd</th>
+                <th>Start Time</th>
+                <th>End Time</th>
+                <th>Duration</th>
+                <th>Actual Scan Rate</th>
+            </tr>
+            <tr>
+                <td>{{ test_instance.cd }}</td>
+                <td>{{ test_instance.start }}</td>
+                <td>{{ test_instance.end }}</td>
+                <td>{{ test_instance.duration }}s</td>
+                <td>{{ test_instance.scan_rate_actual }}hz</td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+    <div>
+        <img src="{{ url_for('static', filename=plot_path)}}" alt="System result chart">
+    </div>
+    <div>
+        <form method="POST" action="/">
+            {{ result_form.test_dropdown.label }}
+            {{ result_form.test_dropdown(onchange="this.form.submit()") }}
+        </form>
+    </div>
+    <script>
+        document.querySelector('[name="submit"]').addEventListener('click', function(e) {
+            // For constants_form
+            document.getElementById('constants_piston_rad_hidden').value = document.querySelector('[name="piston_rad"]').value;
+            document.getElementById('constants_orifice_id_hidden').value = document.querySelector('[name="orifice_id"]').value;
+            document.getElementById('constants_rho_hidden').value = document.querySelector('[name="rho"]').value;
+            document.getElementById('constants_downstream_id_hidden').value = document.querySelector('[name="downstream_id"]').value;
+            document.getElementById('constants_v2p_hidden').value = document.querySelector('[name="v2p"]').value;
+            document.getElementById('constants_v2l_hidden').value = document.querySelector('[name="v2l"]').value;
+        
+            // For ljconfig_form
+            document.getElementById('ljconfig_scan_rate_hidden').value = document.querySelector('[name="scan_rate"]').value;
+            document.getElementById('ljconfig_read_count_hidden').value = document.querySelector('[name="read_count"]').value;
+            document.getElementById('ljconfig_stream_settling_us_hidden').value = document.querySelector('[name="stream_settling_us"]').value;
+            document.getElementById('ljconfig_stream_resolution_index_hidden').value = document.querySelector('[name="stream_resolution_index"]').value;
+            document.getElementById('ljconfig_ain0_range_hidden').value = document.querySelector('[name="ain0_range"]').value;
+
+            // For dropdowns
+            document.getElementById('constants_dropdown_hidden').value = document.querySelector('[name="constants_dropdown"]').value;
+            document.getElementById('ljconfig_dropdown_hidden').value = document.querySelector('[name="ljconfig_dropdown"]').value;
+            document.getElementById('test_dropdown_hidden').value = document.querySelector('[name="test_dropdown"]').value;
+
+        });
+
+    </script>
+</body>
+</html>

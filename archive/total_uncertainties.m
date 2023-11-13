@@ -1,6 +1,8 @@
 % Calculator to get total value of uncertainty, given device specifications
 %% Constant Values
 
+
+
 % Device Parameters
 
 % adc specs
@@ -20,9 +22,9 @@ transducer = convpres(transducer, 'psi', 'Pa');
 
 vars_const = {
     'rho',   1000,                              0; % kg/m3
-    'P1',    convpres(100, 'psi', 'Pa'),    transducer;
-    'P2',    convpres(0, 'psi', 'Pa'),      transducer; 
-    'D2',    convlength(.75, 'in', 'm'),      calipers;
+    'P1',    convpres(50, 'psi', 'Pa'),    transducer;
+    'P2',    convpres(15, 'psi', 'Pa'),      transducer; 
+    'D2',    convlength(.25, 'in', 'm'),      calipers;
     'D1',    convlength(  1, 'in', 'm'),      calipers;
     };
 syms(vars_const{:,1})
@@ -54,9 +56,9 @@ dt = t2 - t1;
 
 Cd = 4*(Di/2)^2 * dx/dt * A*L/vref* D2^(-2) * (2* (P1 - P2) * (rho * (1-(D2/D1)^4))^(-1))^(-1/2);
 
-[u, ref] = get_total_uncertainty('Cd', Cd, [vars_const; vars_vol]);
-fprintf('Total Cd Uncertainty: %1.4f \n', u)
-fprintf('Nominal Cd: %1.4f \n', ref)
+[u, ref, tex] = get_total_uncertainty('Cd', Cd, [vars_const; vars_vol]);
+fprintf('Cd with Uncertainty: %1.4f +/-%1.4f \n', [ref, u/2]);
+
 
 %% Mass Approach
 syms mf mi tf ti dm dt
@@ -67,6 +69,9 @@ cell_accuracy = .001; % percent
 
 % catch and weigh uncertainty
 water_loss = 1; % kg
+
+% time uncertainty for weight
+t_valve = .05;
 
 % reference weight uncertainty
 W_max = convmass(50, 'lbm', 'kg'); % reference weight for load cell calibration
@@ -80,31 +85,33 @@ water_loss_accuracy = water_loss / W_max; % accuracy scalar for final voltage re
 vars_mass = {
     'v1', 0 , cell_accuracy * vmax;
     'v2', 4.175 , rssq([cell_accuracy * vmax, water_loss_accuracy * vmax]);
-    't1', 0, 0;
-    't2', 2.4, 0;
+    't1', 0, t_valve;
+    't2', 2.4, t_valve;
     'W',  W_max, W_accuracy ;
     'A', 1, rssq([adc_accuracy, resolution_uncertainty]);
     "vref", vmax, .0001*vmax;
     };
 
 syms(vars_mass{:,1});
+
 dm = v2 - v1;
 dt = t2 - t1;
 
 Cd = (4/pi) *  dm/(dt * rho) * A * W / vref * D2^-2 * (2*(P1-P2) * (rho*(1-(D2/D1)^4))^(-1))^(-1/2);
 
 
-[u, ref] = get_total_uncertainty('Cd', Cd, [vars_const; vars_mass]);
-fprintf('Total Cd Uncertainty: %1.4f \n', u)
-fprintf('Nominal Cd: %1.4f \n', ref)
+[u, ref, tex] = get_total_uncertainty('Cd', Cd, [vars_const; vars_mass]);
+fprintf('Cd with Uncertainty: %1.4f +/-%1.4f \n', [ref, u/2]);
+
 
 
 %% Functions
 
-function [u, ref] = get_total_uncertainty(name, fx, vars)
+function [u, ref, tex] = get_total_uncertainty(name, fx, vars)
 
     fprintf('%s \n', name)
-    pretty(fx)
+    pretty(vpa(simplify(fx),4))
+    tex = latex(fx);
 
     % covert to syms
     for k = 1:size(vars, 1)
