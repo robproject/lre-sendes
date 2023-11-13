@@ -119,17 +119,17 @@ syms(sym_strs);
 sym_chars = [x1 x2 t1 t2 p1 p2 d1 d2 rho r];
 
 umf_syms = sym.empty;
-u_propogated = zeros(1,length(umf_syms));
+u_propagated = zeros(1,length(umf_syms));
 
 cd = 4 * r^2 * (x2 - x1) / (t2 - t1) * d2^-2 * (2 * (p1 - p2) / (rho * (1- (d2 / d1)^4)))^(-1/2);
 
 for i = 1:length(vals)
     umf_syms(i) = simplify(diff(cd, sym_chars(i)) * sym_chars(i)/cd);
-    u_propogated(i) = eval(subs(umf_syms(i), sym_chars, vals)) * u_vals(i)/vals(i);
+    u_propagated(i) = eval(subs(umf_syms(i), sym_chars, vals)) * u_vals(i)/vals(i);
 end
 
 
-cd_ur = rssq(u_propogated);
+cd_ur = rssq(u_propagated);
 cd_v = eval(subs(cd, sym_chars, vals));
 
 fprintf([...
@@ -140,7 +140,7 @@ fprintf([...
 
 fsym = figure('Name','Relative Uncertainty wrt Cd');
 % plotting relative uncertainty with respect to CD, per variable
-bar(sym_strs, u_propogated)
+bar(sym_strs, u_propagated)
 xlabel('Variable')
 ylabel('Relative Uncertainty wrt Cd, %')
 fsym.Position = fsym.Position + [600, 0, 0, 0];

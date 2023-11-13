@@ -1,9 +1,9 @@
 # lre-sendes
 ## Scripts
-### Uncertainty Propogation
-UncertaintyPropogation.m contains initialization of nominal values and their uncertainties, using the class defined at UData/UObj.m
+### Uncertainty propagation
+UncertaintyPropagation.m contains initialization of nominal values and their uncertainties, using the class defined at UData/UObj.m
 
-Results are viewed using three methods: direct calculation via error propogation rules, symbolic substitution after partially deriving all components, and Monte Carlo.
+Results are viewed using three methods: direct calculation via error propagation rules, symbolic substitution after partially deriving all components, and Monte Carlo.
 
 ## Flask Application
 [Flask Application](sendes/README.md)
