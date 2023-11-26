@@ -48,6 +48,8 @@
                     <th>{{ ljconfig_form.stream_settling_us.label }}</th>
                     <th>{{ ljconfig_form.stream_resolution_index.label }}</th>
                     <th>{{ ljconfig_form.ain0_range.label }}</th>
+                    <th>{{ ljconfig_form.ain1_range.label }}</th>
+                    <th>{{ ljconfig_form.ain2_range.label }}</th>
                 </tr>
                 <tr>
                     <td>{{ ljconfig_form.scan_rate(value=ljconfig_form.scan_rate.data) }}</td>
@@ -55,12 +57,14 @@
                     <td>{{ ljconfig_form.stream_settling_us(value=ljconfig_form.stream_settling_us.data) }}</td>
                     <td>{{ ljconfig_form.stream_resolution_index(value=ljconfig_form.stream_resolution_index.data) }}</td>
                     <td>{{ ljconfig_form.ain0_range() }}</td>
+                    <td>{{ ljconfig_form.ain1_range() }}</td>
+                    <td>{{ ljconfig_form.ain2_range() }}</td>
                 </tr>
             </table>
             <div>
                 {{ ljconfig_form.ljconfig_dropdown.label }}
                 {{ ljconfig_form.ljconfig_dropdown(onchange="this.form.submit()") }}
-                <p>Be sure to update AIN0 Range manually upon config selection</p>
+                <p>Be sure to update AIN Ranges manually upon config selection</p>
             </div>
         </form>
     </div>
@@ -81,6 +85,8 @@
             <input type="hidden" name="ljconfig_stream_settling_us_hidden" id="ljconfig_stream_settling_us_hidden">
             <input type="hidden" name="ljconfig_stream_resolution_index_hidden" id="ljconfig_stream_resolution_index_hidden">
             <input type="hidden" name="ljconfig_ain0_range_hidden" id="ljconfig_ain0_range_hidden">
+            <input type="hidden" name="ljconfig_ain1_range_hidden" id="ljconfig_ain1_range_hidden">
+            <input type="hidden" name="ljconfig_ain2_range_hidden" id="ljconfig_ain2_range_hidden">
 
             <!-- for dropdowns -->
             <input type="hidden" id="constants_dropdown_hidden" name="constants_dropdown_hidden">
@@ -135,6 +141,8 @@
             document.getElementById('ljconfig_stream_settling_us_hidden').value = document.querySelector('[name="stream_settling_us"]').value;
             document.getElementById('ljconfig_stream_resolution_index_hidden').value = document.querySelector('[name="stream_resolution_index"]').value;
             document.getElementById('ljconfig_ain0_range_hidden').value = document.querySelector('[name="ain0_range"]').value;
+            document.getElementById('ljconfig_ain1_range_hidden').value = document.querySelector('[name="ain1_range"]').value;
+            document.getElementById('ljconfig_ain2_range_hidden').value = document.querySelector('[name="ain2_range"]').value;
 
             // For dropdowns
             document.getElementById('constants_dropdown_hidden').value = document.querySelector('[name="constants_dropdown"]').value;

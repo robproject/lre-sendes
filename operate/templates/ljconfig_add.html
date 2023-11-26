@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+<body>
+    <div>
+        {% block title %}Add LJConfig{% endblock %}
+        {% block content %}
+        <form method="POST" action="/ljconfig/add">
+            {{ ljconfig_form.hidden_tag() }}
+            <table>
+                <tr>
+                    <th>{{ ljconfig_form.scan_rate.label }}</th>
+                    <th>{{ ljconfig_form.read_count.label }}</th>
+                    <th>{{ ljconfig_form.stream_settling_us.label }}</th>
+                    <th>{{ ljconfig_form.stream_resolution_index.label }}</th>
+                </tr>
+                <tr>
+                    <td>{{ ljconfig_form.scan_rate()}}</td>
+                    <td>{{ ljconfig_form.read_count()}}</td>
+                    <td>{{ ljconfig_form.stream_settling_us()}}</td>
+                    <td>{{ ljconfig_form.stream_resolution_index()}}</td>
+                </tr>
+            </table>
+            {{ ljconfig_form.submit() }}
+        </form>
+        {% endblock %}
+    </div>
+</body>

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+<body>
+    <div>
+        {% block title %}Add Constants{% endblock %}
+        {% block content %}
+        <form method="POST" action="/constants/add">
+            {{ constants_form.hidden_tag() }}
+            <table>
+                <tr>
+                    <th>{{ constants_form.piston_avg.label }}</th>
+                    <th>{{ constants_form.piston_uncertainty.label }}</th>
+                    <th>{{ constants_form.orifice_avg.label }}</th>
+                    <th>{{ constants_form.orifice_uncertainty.label }}</th>
+                    <th>{{ constants_form.rho_avg.label }}</th>
+                    <th>{{ constants_form.rho_uncertainty.label }}</th>
+                    <th>{{ constants_form.pipe_avg.label }}</th>
+                    <th>{{ constants_form.pipe_uncertainty.label }}</th>
+                </tr>
+                <tr>
+                    <td>{{ constants_form.piston_avg(value=constants_form.piston_avg.data)}}</td>
+                    <td>{{ constants_form.piston_uncertainty(value=constants_form.piston_uncertainty.data)}}</td>
+                    <td>{{ constants_form.orifice_avg(value=constants_form.orifice_avg.data)}}</td>
+                    <td>{{ constants_form.orifice_uncertainty(value=constants_form.orifice_uncertainty.data)}}</td>
+                    <td>{{ constants_form.rho_avg(value=constants_form.rho_avg.data)}}</td>
+                    <td>{{ constants_form.rho_uncertainty(value=constants_form.rho_uncertainty.data)}}</td>
+                    <td>{{ constants_form.pipe_avg(value=constants_form.pipe_avg.data)}}</td>
+                    <td>{{ constants_form.pipe_uncertainty(value=constants_form.pipe_uncertainty.data)}}</td>
+                </tr>
+                <tr>
+                    <th>{{ constants_form.ain0_uncertainty.label }}</th>
+                    <th>{{ constants_form.ain1_uncertainty.label }}</th>
+                    <th>{{ constants_form.ain2_uncertainty.label }}</th>
+                    <th>{{ constants_form.p1_slope.label }}</th>
+                    <th>{{ constants_form.p1_offset.label }}</th>
+                    <th>{{ constants_form.p2_slope.label }}</th>
+                    <th>{{ constants_form.p2_offset.label }}</th>
+                </tr>
+                <tr>
+                    <td>{{ constants_form.ain0_uncertainty() }}</td>
+                    <td>{{ constants_form.ain1_uncertainty() }}</td>
+                    <td>{{ constants_form.ain2_uncertainty() }}</td>
+                    <td>{{ constants_form.p1_slope() }}</td>
+                    <td>{{ constants_form.p1_offset() }}</td>
+                    <td>{{ constants_form.p2_slope() }}</td>
+                    <td>{{ constants_form.p2_offset() }}</td>
+                </tr>
+            </table>
+            {{ constants_form.submit() }}
+        </form>
+        {% endblock %}
+    </div>
+</body>
