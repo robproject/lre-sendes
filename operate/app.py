@@ -8,7 +8,7 @@ from flask_wtf import FlaskForm
 from wtforms import IntegerField, SelectField, FloatField, SubmitField, HiddenField
 from wtforms.validators import DataRequired, NumberRange, AnyOf
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 import os
 
@@ -22,7 +22,7 @@ from rich.console import Console
 
 ur = UnitRegistry()
 app = Flask(__name__)
-app.config["SQLALCHEMY_ECHO"] = True
+# app.config["SQLALCHEMY_ECHO"] = True
 
 console = Console()
 
@@ -107,14 +107,14 @@ class Test(db.Model):
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
     start: Mapped[str] = mapped_column(db.Text)
     finish: Mapped[str] = mapped_column(db.Text)
-    duration: Mapped[float] = mapped_column(db.Float)
+    duration: Mapped[str] = mapped_column(db.String)
     scan_rate_actual: Mapped[float] = mapped_column(db.Float)
     window_start: Mapped[int] = mapped_column(db.Integer)
     window_finish: Mapped[int] = mapped_column(db.Integer)
     window_n: Mapped[int] = mapped_column(db.Integer)
-    avg_uain0: Mapped[str] = mapped_column(db.String)
-    avg_uain1: Mapped[str] = mapped_column(db.String)
-    avg_uain2_diff: Mapped[str] = mapped_column(db.String)
+    ufloat_ain0: Mapped[str] = mapped_column(db.String)
+    ufloat_ain1: Mapped[str] = mapped_column(db.String)
+    ufloat_ain2_diff: Mapped[str] = mapped_column(db.String)
     ljconfig_id: Mapped[int] = mapped_column(db.ForeignKey("ljconfig.id"))
     constants_id: Mapped[int] = mapped_column(db.ForeignKey("constants.id"))
     stream_reads: Mapped[List["StreamRead"]] = relationship()
@@ -149,6 +149,88 @@ class Scan(db.Model):
 
 with app.app_context():
     db.create_all()
+    # create sample data - ljconfig, constants, test, streamreads, scan
+    # get actual values from matlab for voltages and constants
+    if not db.session.get(Constants, 1):
+        constants = Constants(
+            piston_avg=3.505,
+            piston_uncertainty=0.002284631,
+            orifice_avg=0.238,
+            orifice_uncertainty=7.84915e-4,
+            rho_avg=1000,
+            rho_uncertainty=0,
+            pipe_avg=0.618,
+            pipe_uncertainty=0.001129,
+            ain0_uncertainty=0.007120869,
+            ain1_uncertainty=0.007436709,
+            ain2_uncertainty=6.08881e-5,
+            p1_slope=0.9977953,
+            p1_offset=-0.008752722,
+            p2_slope=1.002007,
+            p2_offset=0.1061045,
+            is_active=True,
+        )
+        ljconfig = Ljconfig(
+            scan_rate=267,
+            scan_rate_actual=267,
+            buffer_size=int(267 / 2),
+            read_count=5,
+            ain_all_negative_ch=0,
+            stream_settling_us=0,
+            stream_resolution_index=8,
+            is_active=True,
+            is_valid=True,
+            error_message="None",
+        )
+        t = datetime.now()
+        test = Test(
+            start=str(t),
+            finish=str(t + timedelta(seconds=2.5)),
+            duration=str(timedelta(seconds=2.5)),
+            scan_rate_actual=267,
+            window_start=267,
+            window_finish=int(int(267 / 2) * (5 - 1.8)),
+            window_n=int(int(int(267 / 2) * (5 - 1.8)) - 267),
+            ufloat_ain0="not analyzed",
+            ufloat_ain1="not analyzed",
+            ufloat_ain2_diff="not analyzed",
+        )
+        #
+        stream_length = int(267 / 2)
+        x = np.arange(0, 2.5, 1 / 267)
+        ain0, ain1, ain2 = np.ones_like(x), np.ones_like(x), np.ones_like(x)
+        ain1[(x < 0.5)] = 0.9451
+        ain2[(x < 0.5)] = 0.2
+        ain1[(x >= 0.5) & (x < 1)] = (
+            -(0.9451 - 0.471) / 0.5 * x[(x >= 0.5) & (x < 1)] + 0.9451 + 0.9451 - 0.471
+        )
+        ain2[(x >= 0.5) & (x < 2)] = x[(x >= 0.5) & (x < 2)] * 0.0734 + 0.1633
+        ain1[(x >= 1) & (x < 2)] = 0.471
+        ain2[(x >= 2)] = 2 * 0.0734 + 0.1633
+        ain1[(x >= 2)] = (0.9451 - 0.471) / 0.5 * x[(x >= 2)] - 1.4254
+        ain0[:] = 0.9451
+
+        j = 1
+        for k in range(5):
+            i = k * 0.5
+            stream_read = StreamRead(stream_i=j, skipped=0, lj_backlog=0, ljm_backlog=0)
+            j += 1
+            stream_read.scans = [
+                Scan(ain0=x, ain1=y, ain2=z)
+                for x, y, z in zip(
+                    ain0[(i < x) & (i + 0.5 > x)],
+                    ain1[(i < x) & (i + 0.5 > x)],
+                    ain2[(i < x) & (i + 0.5 > x)],
+                )
+            ]
+            test.stream_reads.append(stream_read)
+
+        constants.tests = [test]
+        ljconfig.tests = [test]
+        db.session.add(test)
+        db.session.add(constants)
+        db.session.add(ljconfig)
+        db.session.commit()
 
 
 class ConstantsForm(FlaskForm):
@@ -239,8 +321,8 @@ class ConstantsService:
     @staticmethod
     def get_vars(c: Constants) -> tuple[Quantity, Quantity, Quantity, Quantity]:
         d = (ufloat(c.piston_avg, c.piston_uncertainty) * ur.inch).to("meter")
-        d1 = (ufloat(c.orifice_avg, c.orifice_uncertainty) * ur.inch).to("meter")
-        d2 = (ufloat(c.pipe_avg, c.pipe_uncertainty) * ur.inch).to("meter")
+        d1 = (ufloat(c.pipe_avg, c.pipe_uncertainty) * ur.inch).to("meter")
+        d2 = (ufloat(c.orifice_avg, c.orifice_uncertainty) * ur.inch).to("meter")
         rho = ufloat(c.rho_avg, c.rho_uncertainty) * ur.kg / (ur.meter**3)
         return d, d1, d2, rho
 
@@ -321,7 +403,7 @@ class LjconfigService:
 
         db.session.add(ljconfig_entry)
         db.session.commit()
-        return ljconifg_entry
+        return ljconfig_entry
 
 
 class TestService:
@@ -527,31 +609,29 @@ class TestService:
 
     @staticmethod
     def get_images(t: Test) -> list[str]:
-        raw_v = f"/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_raw.png"
-        delta_v = f"/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_delta.png"
+        raw_v = f"operate/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_raw.png"
+        delta_v = f"operate/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_delta.png"
 
         if not os.path.isfile(raw_v):
-            t = np.arange(
-                0, t.window_n * 1 / t.scan_rate_actual, 1 / t.scan_rate_actual
+            tt = np.arange(
+                0, (t.window_n+1) * 1 / t.scan_rate_actual, 1 / t.scan_rate_actual
             )
             dtype = [(f"ain{i}", "f8") for i in range(3)]
-            scans = np.array(
-                t.scans[t.window_start : t.window_finish],
-                dtype=dtype,
-            )
+            scans = [(s.ain0, s.ain1, s.ain2) for s in t.scans[t.window_start : t.window_finish]]
+            scans = np.array(scans,dtype=dtype)
             plt.clf()
-            plt.plot(t, scans["ain0"], label="$V_{P1}$")
-            plt.plot(t, scans["ain1"], label="$V_{P2}$")
-            plt.plot(t, scans["ain2"], label="$V_X$")
+            plt.plot(tt, scans["ain0"], label="$V_{P1}$")
+            plt.plot(tt, scans["ain1"], label="$V_{P2}$")
+            plt.plot(tt, scans["ain2"], label="$V_X$")
             plt.ylabel("Volts")
             plt.xlabel("Time")
             plt.legend()
             plt.savefig(raw_v)
 
-            t = t[:-1]
+            tt = tt[:-1]
             plt.clf()
-            plt.plot(t, (scans["ain1"] - scans["ain0"])[:-1], label="$\Delta P$")
-            plt.plot(t, np.diff(scans["ain2"]), label="$\Delta V_X$")
+            plt.plot(tt, (scans["ain1"] - scans["ain0"])[:-1], label="$\Delta P$")
+            plt.plot(tt, np.diff(scans["ain2"]), label="$\Delta V_X$")
             plt.ylabel("Volts")
             plt.xlabel("Time")
             plt.legend()
@@ -562,31 +642,34 @@ class TestService:
     @staticmethod
     def analyze(test_entry: Test) -> Test:
         constants = db.session.get(Constants, test_entry.constants_id)
+        scans = [
+            (s.ain0, s.ain1, s.ain2)
+            for s in test_entry.scans[
+                test_entry.window_start : test_entry.window_finish
+            ]
+        ]
         dtype = [(f"ain{i}", "f8") for i in range(3)]
-        scans = np.array(
-            test_entry.scans[test_entry.window_start : test_entry.window_finish],
-            dtype=dtype,
-        )
+        scans = np.array(scans, dtype=dtype)
         num_scans = len(scans)
         test_entry.window_n = num_scans - 1
 
-        test_entry.avg_uain0 = str(
+        test_entry.ufloat_ain0 = str(
             np.average(
                 unumpy.umatrix(
                     scans["ain0"], np.ones(num_scans) * constants.ain0_uncertainty
-                )[:-1]
+                )
             )
         )
-        test_entry.avg_uain1 = str(
+        test_entry.ufloat_ain1 = str(
             np.average(
-                unumpy.matrix(
+                unumpy.umatrix(
                     scans["ain1"], np.ones(num_scans) * constants.ain1_uncertainty
-                )[:-1]
+                )
             )
         )
-        test_entry.avg_uain2_diff = str(
+        test_entry.ufloat_ain2_diff = str(
             np.average(
-                unumpy.matrix(
+                unumpy.umatrix(
                     np.diff(scans["ain2"]),
                     np.ones(num_scans - 1) * pow(2, 0.5) * constants.ain2_uncertainty,
                 )
@@ -602,13 +685,14 @@ class TestService:
 class ResultService:
     @staticmethod
     def get_vars(t: Test, c: Constants):
-        dx = ResultService.v2l(ufloat_fromstr(t.avg_uain2_diff) * ur.volt)
-        p1 = ResultService.v2p(ufloat_fromstr(t.avg_uain0) * ur.volt, "p1", c)
-        p2 = ResultService.v2p(ufloat_fromstr(t.avg_uain1) * ur.volt, "p2", c)
+        dx = ResultService.v2l(ufloat_fromstr(t.ufloat_ain2_diff) * ur.volt)
+        p1 = ResultService.v2p(ufloat_fromstr(t.ufloat_ain0) * ur.volt, "p1", c)
+        p2 = ResultService.v2p(ufloat_fromstr(t.ufloat_ain1) * ur.volt, "p2", c)
         return dx, p1, p2
 
     @staticmethod
-    def analyze(test_entry: Test, constants_id: int = None) -> ufloat:
+    def analyze(test_id: int, constants_id: int = None) -> str:
+        test_entry = db.session.get(Test, test_id)
         constants = db.session.get(
             Constants, test_entry.constants_id if constants_id is None else constants_id
         )
@@ -616,7 +700,7 @@ class ResultService:
         d, d1, d2, rho = ConstantsService.get_vars(constants)
         dx, p1, p2 = ResultService.get_vars(test_entry, constants)
 
-        dt = 1 / test_entry.scan_rate_actual
+        dt = 1 / test_entry.scan_rate_actual * ur.s
         num = 4 * (d / 2) ** 2 * dx / dt
         rad_num = 2 * (p1 - p2)
         rad_den = rho * (1 - (d2 / d1) ** 4)
@@ -634,7 +718,7 @@ class ResultService:
                 * (200 * ur.psi)
                 / (0.016 * ur.A)
                 * getattr(c, f"{p}_slope")
-                + getattr(c, f"{p}_offset")
+                + getattr(c, f"{p}_offset") * ur.psi
             )
         ).to("Pa")
 
@@ -757,13 +841,16 @@ def set_test_bound(test_id):
 
 @app.route("/results/<int:test_id>", methods=["GET"])
 def get_result(test_id):
+    cd = ResultService.analyze(test_id)
+    print(cd)
     # display result for test with active constant applied. Provide option to
     # use different constants
-    pass
+    return redirect(url_for("index"))
 
 
 @app.route("/results", methods=["GET"])
 def results():
+
     # show list of aggregated results with active constants applied
     # provide option to show new constants applied with checkboxes and new constants dropdown or something
     pass
