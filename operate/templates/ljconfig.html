@@ -27,11 +27,15 @@
                 {% if l.is_active %}
                     <td style="font-weight:bold; font-size:15.5pt;">ACTIVE</td>
                 {% else %}
+                {% if l.is_valid %}
                     <td>
                         <form action="/ljconfig/activate/{{l.id}}" method="post">
                             <button type="submit" class="btn btn-primary btn-sm">Activate</button>
                         </form>
                     </td>
+                {% else %}
+                    <td style="font-weight:bold; font-size:15.5pt;">INVALID</td>
+                {% endif %}
                 {% endif %}
                 <td>{{ l.is_valid }}</td>
                 <td>{{ l.error_message }}</td>

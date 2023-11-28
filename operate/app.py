@@ -150,8 +150,12 @@ class Scan(db.Model):
 with app.app_context():
     db.create_all()
     # create sample data - ljconfig, constants, test, streamreads, scan
-    # get actual values from matlab for voltages and constants
+    # get actual values from matlab UncertaintyPropagation for voltages and constants
     if not db.session.get(Constants, 1):
+        scan_rate = 267
+        stream_reads = 5
+        sec_div = 2
+        scans_per_read = int(scan_rate / sec_div)
         constants = Constants(
             piston_avg=3.505,
             piston_uncertainty=0.002284631,
@@ -171,11 +175,11 @@ with app.app_context():
             is_active=True,
         )
         ljconfig = Ljconfig(
-            scan_rate=267,
-            scan_rate_actual=267,
-            buffer_size=int(267 / 2),
-            read_count=5,
-            ain_all_negative_ch=0,
+            scan_rate=scan_rate,
+            scan_rate_actual=scan_rate,
+            buffer_size=scans_per_read,
+            read_count=stream_reads,
+            ain_all_negative_ch=ljm.constants.GND,
             stream_settling_us=0,
             stream_resolution_index=8,
             is_active=True,
@@ -185,31 +189,44 @@ with app.app_context():
         t = datetime.now()
         test = Test(
             start=str(t),
-            finish=str(t + timedelta(seconds=2.5)),
-            duration=str(timedelta(seconds=2.5)),
-            scan_rate_actual=267,
-            window_start=267,
-            window_finish=int(int(267 / 2) * (5 - 1.8)),
-            window_n=int(int(int(267 / 2) * (5 - 1.8)) - 267),
+            finish=str(t + timedelta(seconds=stream_reads / sec_div)),
+            duration=str(
+                (timedelta(seconds=stream_reads / sec_div)).seconds
+                + float((timedelta(seconds=stream_reads / sec_div)).microseconds)
+                / 1000000
+            ),
+            scan_rate_actual=scan_rate,
+            window_start=scan_rate,
+            window_finish=int(scans_per_read * (stream_reads - 1.8)),
+            window_n=int(int(scans_per_read * (stream_reads - 1.8)) - scan_rate),
             ufloat_ain0="not analyzed",
             ufloat_ain1="not analyzed",
             ufloat_ain2_diff="not analyzed",
         )
         #
-        stream_length = int(267 / 2)
-        x = np.arange(0, 2.5, 1 / 267)
+        x = np.arange(0, stream_reads / sec_div, 1 / scan_rate)
+        # sample test data
         ain0, ain1, ain2 = np.ones_like(x), np.ones_like(x), np.ones_like(x)
+        # ain0 = P1
+        ain0[:] = 0.9451
+        # ain1 = P2
         ain1[(x < 0.5)] = 0.9451
-        ain2[(x < 0.5)] = 0.2
         ain1[(x >= 0.5) & (x < 1)] = (
             -(0.9451 - 0.471) / 0.5 * x[(x >= 0.5) & (x < 1)] + 0.9451 + 0.9451 - 0.471
         )
-        ain2[(x >= 0.5) & (x < 2)] = x[(x >= 0.5) & (x < 2)] * 0.0734 + 0.1633
         ain1[(x >= 1) & (x < 2)] = 0.471
-        ain2[(x >= 2)] = 2 * 0.0734 + 0.1633
         ain1[(x >= 2)] = (0.9451 - 0.471) / 0.5 * x[(x >= 2)] - 1.4254
-        ain0[:] = 0.9451
+        # ain2 = x
+        ain2[(x < 0.5)] = 0.2
+        ain2[(x >= 0.5) & (x < 2)] = x[(x >= 0.5) & (x < 2)] * 0.368 + 0.016
+        ain2[(x >= 2)] = 2 * 0.368 + 0.016
 
+        # apply noise
+        ain0 = np.random.normal(ain0, constants.ain0_uncertainty)
+        ain1 = np.random.normal(ain1, constants.ain0_uncertainty)
+        ain2 = np.random.normal(ain2, constants.ain2_uncertainty)
+
+        # create stream reads and scans
         j = 1
         for k in range(5):
             i = k * 0.5
@@ -276,6 +293,24 @@ class ResultForm(FlaskForm):
     test_dropdown = SelectField("Select Test")
 
 
+class dbService:
+    # gets existing row based on unique constraint
+    @staticmethod
+    def fetch_existing(model, instance):
+        conditions = []
+        for attr in inspect(instance).attrs:
+            # Reflectively build conditions based on the object's attributes (ChatGPT)
+            # only constrained fields
+            if attr.key in {c.name for c in model.__table_args__[0].columns}:
+                conditions.append(
+                    getattr(model, attr.key) == getattr(instance, attr.key)
+                )
+        instance = db.session.execute(
+            select(model).where(and_(*conditions))
+        ).scalar_one()
+        return instance
+
+
 class ConstantsService:
     @staticmethod
     def create(form):
@@ -287,19 +322,7 @@ class ConstantsService:
             db.session.commit()
         except db.exc.IntegrityError:
             db.session.rollback()
-            # Reflectively build conditions based on the object's attributes (ChatGPT)
-            conditions = []
-            for attr in inspect(constants_entry).attrs:
-                if attr.key in {
-                    c.name for c in Constants.__table_args__[0].columns
-                }:  # only constrained fields
-                    conditions.append(
-                        getattr(Constants, attr.key)
-                        == getattr(constants_entry, attr.key)
-                    )
-            constants_entry = db.session.execute(
-                select(Constants).where(and_(*conditions))
-            ).scalar_one_or_none()
+            constants_entry = dbService.fetch_existing(Constants, constants_entry)
         return constants_entry
 
     @staticmethod
@@ -334,26 +357,17 @@ class LjconfigService:
         form.populate_obj(ljconfig_entry)
         ljconfig_entry.is_active = False
         ljconfig_entry.is_valid = False
+        ljconfig_entry.ain_all_negative_ch = ljm.constants.GND
+        ljconfig_entry.buffer_size = int(ljconfig_entry.scan_rate / 2)
+        ljconfig_entry.error_message = "None"
+        ljconfig_entry.scan_rate_actual = 0
         try:
             db.session.add(ljconfig_entry)
             db.session.commit()
+            ljconfig_entry = LjconfigService.validate(ljconfig_entry)
         except db.exc.IntegrityError:
             db.session.rollback()
-            # Reflectively build conditions based on the object's attributes (ChatGPT)
-            conditions = []
-            for attr in inspect(ljconfig_entry).attrs:
-                if attr.key in {
-                    c.name for c in Ljconfig.__table_args__[0].columns
-                }:  # only constrained fields
-                    conditions.append(
-                        getattr(Ljconfig, attr.key) == getattr(ljconfig_entry, attr.key)
-                    )
-            ljconfig_entry = db.session.execute(
-                select(Ljconfig).where(and_(*conditions))
-            ).scalar_one_or_none()
-            return ljconfig_entry
-
-        ljconfig_entry = LjconfigService.validate(ljconfig_entry)
+            ljconfig_entry = dbService.fetch_existing(Ljconfig, ljconfig_entry)
         return ljconfig_entry
 
     @staticmethod
@@ -382,11 +396,7 @@ class LjconfigService:
 
     @staticmethod
     def validate(ljconfig_entry):
-        try:
-            result = TestService.execute(ljconfig_entry, live=False)
-        except Exception as e:
-            result = e
-
+        result = TestService.execute(ljconfig_entry, live=False)
         if isinstance(result, Test):
             if any(
                 [
@@ -399,7 +409,7 @@ class LjconfigService:
                 ljconfig_entry.is_valid = True
             ljconfig_entry.scan_rate_actual = result.scan_rate_actual
         else:
-            ljconfig_entry.error_message = result
+            ljconfig_entry.error_message = str(result)
 
         db.session.add(ljconfig_entry)
         db.session.commit()
@@ -434,11 +444,10 @@ class TestService:
         aScanList = ljm.namesToAddresses(numAddresses, aScanListNames)[0]
 
         # ljm config
-        scanRate = int(ljconfig.scan_rate)
-        scansPerRead = int(scanRate / 2)
-        MAX_REQUESTS = (
-            ljconfig.read_count
-        )  # The number of eStreamRead calls that will be performed.
+        scanRate = ljconfig.scan_rate
+        scansPerRead = ljconfig.buffer_size
+        MAX_REQUESTS = ljconfig.read_count
+        # The number of eStreamRead calls that will be performed.
 
         # All negative channels are single-ended, AIN0 and AIN1 ranges are
         # +/-10 V, stream settling is 0 (default) and stream resolution index
@@ -449,7 +458,7 @@ class TestService:
 
         # ljm config object creation
         aConfig = {
-            "AIN_ALL_NEGATIVE_CH": ljm.constants.GND,
+            "AIN_ALL_NEGATIVE_CH": ljconfig.ain_all_negative_ch,
             "AIN0_RANGE": 1,
             "AIN1_RANGE": 1,
             "AIN2_RANGE": 1,
@@ -512,6 +521,10 @@ class TestService:
                         scan_rate_actual=0.0,
                         window_start=int(scansPerRead * 2),
                         window_finish=int(scansPerRead * (MAX_REQUESTS - 1.8)),
+                        window_n=int(
+                            int(scansPerRead * (MAX_REQUESTS - 1.8))
+                            - ljconfig.scan_rate
+                        ),
                         ufloat_ain0="not analyzed",
                         ufloat_ain1="not analyzed",
                         ufloat_ain2_diff="not analyzed",
@@ -539,12 +552,12 @@ class TestService:
                 test_entry.stream_reads.append(stream_read_entry)
 
                 for k in range(0, len(aData), numAddresses):
-                    scan_entry = {
-                        "ain0": aData[k],
-                        "ain1": aData[k + 1],
-                        "ain2": aData[k + 2],
+                    scan_entry = Scan(
+                        ain0=aData[k],
+                        ain1=aData[k + 1],
+                        ain2=aData[k + 2]
                         # "stream_read_id": stream_read_entry.id,
-                    }
+                    )
                     stream_read_entry.scans.append(scan_entry)
 
                 console.print(
@@ -557,7 +570,7 @@ class TestService:
             # update test entry
             end = datetime.now()
             tt = (end - start).seconds + float((end - start).microseconds) / 1000000
-            test_entry.end = end.isoformat()
+            test_entry.finish = end.isoformat()
             test_entry.duration = str(tt)
             test_entry.scan_rate_actual = scanRate
 
@@ -574,13 +587,13 @@ class TestService:
         except ljm.LJMError:
             ljme = sys.exc_info()[1]
             ljm.eWriteName(handle, "DAC0", 0)
-            console.print(f"valve closed\n {ljme}", style="magenta")
+            console.print(f"valve closed\n {ljme}", style="orange_red1")
             ljm.close(handle)
-            return e
+            return ljme
         except Exception:
             e = sys.exc_info()[1]
             ljm.eWriteName(handle, "DAC0", 0)
-            console.print(f"valve closed\n {e}", style="magenta")
+            console.print(f"valve closed\n {e}", style="orange_red1")
             ljm.close(handle)
             return e
 
@@ -589,12 +602,12 @@ class TestService:
             ljm.eStreamStop(handle)
         except ljm.LJMError:
             ljme = sys.exc_info()[1]
-            console.print(ljme, style="magenta")
+            console.print(ljme, style="orange_red1")
             ljm.close(handle)
-            return e
+            return ljme
         except Exception:
             e = sys.exc_info()[1]
-            console.print(e, style="magenta")
+            console.print(e, style="orange_red1")
             ljm.close(handle)
             return e
 
@@ -609,16 +622,17 @@ class TestService:
 
     @staticmethod
     def get_images(t: Test) -> list[str]:
-        raw_v = f"operate/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_raw.png"
-        delta_v = f"operate/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_delta.png"
+        base = "operate"
+        raw_v = f"/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_raw.png"
+        delta_v = f"/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_delta.png"
 
         if not os.path.isfile(raw_v):
             tt = np.arange(
-                0, (t.window_n+1) * 1 / t.scan_rate_actual, 1 / t.scan_rate_actual
+                0, len(t.scans) * 1 / t.scan_rate_actual, 1 / t.scan_rate_actual
             )
             dtype = [(f"ain{i}", "f8") for i in range(3)]
-            scans = [(s.ain0, s.ain1, s.ain2) for s in t.scans[t.window_start : t.window_finish]]
-            scans = np.array(scans,dtype=dtype)
+            scans = [(s.ain0, s.ain1, s.ain2) for s in t.scans]
+            scans = np.array(scans, dtype=dtype)
             plt.clf()
             plt.plot(tt, scans["ain0"], label="$V_{P1}$")
             plt.plot(tt, scans["ain1"], label="$V_{P2}$")
@@ -626,16 +640,16 @@ class TestService:
             plt.ylabel("Volts")
             plt.xlabel("Time")
             plt.legend()
-            plt.savefig(raw_v)
+            plt.savefig(f"{base}{raw_v}")
 
             tt = tt[:-1]
             plt.clf()
-            plt.plot(tt, (scans["ain1"] - scans["ain0"])[:-1], label="$\Delta P$")
+            plt.plot(tt, (scans["ain0"] - scans["ain1"])[:-1], label="$\Delta P$")
             plt.plot(tt, np.diff(scans["ain2"]), label="$\Delta V_X$")
             plt.ylabel("Volts")
             plt.xlabel("Time")
             plt.legend()
-            plt.savefig(delta_v)
+            plt.savefig(f"{base}{delta_v}")
 
         return [raw_v, delta_v]
 
@@ -684,7 +698,7 @@ class TestService:
 
 class ResultService:
     @staticmethod
-    def get_vars(t: Test, c: Constants):
+    def get_vars(t: Test, c: Constants) -> tuple[Quantity, Quantity, Quantity]:
         dx = ResultService.v2l(ufloat_fromstr(t.ufloat_ain2_diff) * ur.volt)
         p1 = ResultService.v2p(ufloat_fromstr(t.ufloat_ain0) * ur.volt, "p1", c)
         p2 = ResultService.v2p(ufloat_fromstr(t.ufloat_ain1) * ur.volt, "p2", c)
@@ -706,7 +720,6 @@ class ResultService:
         rad_den = rho * (1 - (d2 / d1) ** 4)
         den = d2**2 * (rad_num / rad_den) ** (1 / 2)
         cd = num / den
-        print(cd.dimensionless == True)
 
         return cd.magnitude
 
@@ -735,6 +748,36 @@ class ResultService:
         # image 3: bar chart of relative uncertainties of each variable
         # maybe include calculation window
         # return paths in dict
+        base = "operate"
+        raw_v = f"/static/results/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_raw.png"
+        delta_v = f"/static/results/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_delta.png"
+
+        if not os.path.isfile(raw_v):
+            tt = np.arange(
+                0, len(t.scans) * 1 / t.scan_rate_actual, 1 / t.scan_rate_actual
+            )
+            dtype = [(f"ain{i}", "f8") for i in range(3)]
+            scans = [(s.ain0, s.ain1, s.ain2) for s in t.scans]
+            scans = np.array(scans, dtype=dtype)
+            plt.clf()
+            plt.plot(tt, scans["ain0"], label="$V_{P1}$")
+            plt.plot(tt, scans["ain1"], label="$V_{P2}$")
+            plt.plot(tt, scans["ain2"], label="$V_X$")
+            plt.ylabel("Volts")
+            plt.xlabel("Time")
+            plt.legend()
+            plt.savefig(f"{base}{raw_v}")
+
+            tt = tt[:-1]
+            plt.clf()
+            plt.plot(tt, (scans["ain0"] - scans["ain1"])[:-1], label="$\Delta P$")
+            plt.plot(tt, np.diff(scans["ain2"]), label="$\Delta V_X$")
+            plt.ylabel("Volts")
+            plt.xlabel("Time")
+            plt.legend()
+            plt.savefig(f"{base}{delta_v}")
+
+        return [raw_v, delta_v]
         pass
 
 
@@ -792,7 +835,7 @@ def add_ljconfig():
     if ljconfig_form.validate_on_submit():
         ljconfig_entry = LjconfigService.create(ljconfig_form)
         return redirect(
-            url_for("activate_ljconfig", ljconifg_id=ljconfig_entry.id), code=307
+            url_for("activate_ljconfig", ljconfig_id=ljconfig_entry.id), code=307
         )
     else:
         return render_template("ljconfig_add.html", ljconfig_form=ljconfig_form)
@@ -808,7 +851,7 @@ def activate_ljconfig(ljconfig_id):
 def get_tests():
     # display list of tests, with buttons to view result or view test
     tests = db.session.execute(select(Test)).scalars()
-    return render_template("test.html", tests=tests)
+    return render_template("tests.html", tests=tests)
 
 
 @app.route("/test", methods=["POST"])
@@ -816,18 +859,20 @@ def execute_test():
     test_entry = TestService.execute(live=True)
     db.session.add(test_entry)
     db.session.commit()
-    return redirect(url_for("get_test", test_id=test_entry.id), code=307)
+    return redirect(url_for("get_test", test_id=test_entry.id))
 
 
 @app.route("/test/<int:test_id>", methods=["GET"])
 def get_test(test_id):
     bound_form = TestBoundForm()
     test = TestService.get(test_id)
+    bound_form.window_start.data = test.window_start
+    bound_form.window_finish.data = test.window_finish
     images = TestService.get_images(test)
     return render_template("test.html", test=test, images=images, bound_form=bound_form)
 
 
-@app.route("/test/set/<int:test_id>", methods=["PUT"])
+@app.route("/test/set/<int:test_id>", methods=["POST"])
 def set_test_bound(test_id):
     referrer = request.referrer
     if referrer:
@@ -845,12 +890,12 @@ def get_result(test_id):
     print(cd)
     # display result for test with active constant applied. Provide option to
     # use different constants
-    return redirect(url_for("index"))
+    return render_template("result.html", test=test, cd=cd, images=images)
 
 
 @app.route("/results", methods=["GET"])
 def results():
-
+    tests = db.session.execute(select(Test)).scalars()
     # show list of aggregated results with active constants applied
     # provide option to show new constants applied with checkboxes and new constants dropdown or something
-    pass
+    return render_template("results.html", tests=tests)
