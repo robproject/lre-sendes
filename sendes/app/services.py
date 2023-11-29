@@ -1,151 +1,15 @@
-from flask import Flask, render_template, redirect, url_for, request
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
+from app.extensions import db, ur, console
+from app.models import Constants, Ljconfig, Test, StreamRead, Scan
+
 from sqlalchemy import select, and_, inspect
-from typing import List
 
-from flask_wtf import FlaskForm
-from wtforms import IntegerField, SelectField, FloatField, SubmitField, HiddenField
-from wtforms.validators import DataRequired, NumberRange, AnyOf
-
+import sys, os
 from datetime import datetime, timedelta
-import sys
-import os
-
-from labjack import ljm
 import numpy as np
 import matplotlib.pyplot as plt
 from uncertainties import ufloat, ufloat_fromstr, unumpy
-from pint import Quantity, UnitRegistry
-
-from rich.console import Console
-
-ur = UnitRegistry()
-app = Flask(__name__)
-# app.config["SQLALCHEMY_ECHO"] = True
-
-console = Console()
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-db = SQLAlchemy(model_class=Base)
-app.secret_key = "test_key"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///sendes.db"
-db.init_app(app)
-
-
-class Constants(db.Model):
-    id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
-    piston_avg: Mapped[float] = mapped_column(db.Float)
-    piston_uncertainty: Mapped[float] = mapped_column(db.Float)
-    orifice_avg: Mapped[float] = mapped_column(db.Float)
-    orifice_uncertainty: Mapped[float] = mapped_column(db.Float)
-    rho_avg: Mapped[float] = mapped_column(db.Float)
-    rho_uncertainty: Mapped[float] = mapped_column(db.Float)
-    pipe_avg: Mapped[float] = mapped_column(db.Float)
-    pipe_uncertainty: Mapped[float] = mapped_column(db.Float)
-    ain0_uncertainty: Mapped[float] = mapped_column(db.Float)
-    ain1_uncertainty: Mapped[float] = mapped_column(db.Float)
-    ain2_uncertainty: Mapped[float] = mapped_column(db.Float)
-    p1_slope: Mapped[float] = mapped_column(db.Float)
-    p1_offset: Mapped[float] = mapped_column(db.Float)
-    p2_slope: Mapped[float] = mapped_column(db.Float)
-    p2_offset: Mapped[float] = mapped_column(db.Float)
-    is_active: Mapped[bool] = mapped_column(db.Boolean)
-    tests: Mapped[List["Test"]] = relationship()
-
-    __table_args__ = (
-        db.UniqueConstraint(
-            "piston_avg",
-            "piston_uncertainty",
-            "orifice_avg",
-            "orifice_uncertainty",
-            "rho_avg",
-            "rho_uncertainty",
-            "pipe_avg",
-            "pipe_uncertainty",
-            "ain0_uncertainty",
-            "ain1_uncertainty",
-            "ain2_uncertainty",
-            "p1_slope",
-            "p1_offset",
-            "p2_slope",
-            "p2_offset",
-            name="uq_constants",
-        ),
-    )
-
-
-class Ljconfig(db.Model):
-    id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
-    scan_rate: Mapped[int] = mapped_column(db.Integer)
-    scan_rate_actual: Mapped[float] = mapped_column(db.Float)
-    buffer_size: Mapped[int] = mapped_column(db.Integer)
-    read_count: Mapped[int] = mapped_column(db.Integer)
-    ain_all_negative_ch: Mapped[int] = mapped_column(db.Integer)
-    stream_settling_us: Mapped[int] = mapped_column(db.Integer)
-    stream_resolution_index: Mapped[int] = mapped_column(db.Integer)
-    is_active: Mapped[bool] = mapped_column(db.Boolean)
-    is_valid: Mapped[bool] = mapped_column(db.Boolean)
-    error_message: Mapped[str] = mapped_column(db.String)
-    tests: Mapped[List["Test"]] = relationship()
-
-    __table_args__ = (
-        db.UniqueConstraint(
-            "scan_rate",
-            "stream_settling_us",
-            "stream_resolution_index",
-            name="uq_ljconfig",
-        ),
-    )
-
-
-class Test(db.Model):
-    id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
-    start: Mapped[str] = mapped_column(db.Text)
-    finish: Mapped[str] = mapped_column(db.Text)
-    duration: Mapped[str] = mapped_column(db.String)
-    scan_rate_actual: Mapped[float] = mapped_column(db.Float)
-    window_start: Mapped[int] = mapped_column(db.Integer)
-    window_finish: Mapped[int] = mapped_column(db.Integer)
-    ufloat_ain0: Mapped[str] = mapped_column(db.String)
-    ufloat_ain1: Mapped[str] = mapped_column(db.String)
-    ufloat_ain2_diff: Mapped[str] = mapped_column(db.String)
-    ljconfig_id: Mapped[int] = mapped_column(db.ForeignKey("ljconfig.id"))
-    constants_id: Mapped[int] = mapped_column(db.ForeignKey("constants.id"))
-    stream_reads: Mapped[List["StreamRead"]] = relationship()
-    scans: Mapped[List["Scan"]] = relationship(
-        "Scan",
-        secondary="stream_read",
-        primaryjoin="Test.id==StreamRead.test_id",
-        secondaryjoin="StreamRead.id==Scan.stream_read_id",
-        viewonly=True,
-    )
-
-
-class StreamRead(db.Model):
-    id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
-    stream_i: Mapped[int] = mapped_column(db.Integer)
-    skipped: Mapped[int] = mapped_column(db.Integer)
-    lj_backlog: Mapped[int] = mapped_column(db.Integer)
-    ljm_backlog: Mapped[int] = mapped_column(db.Integer)
-    scans: Mapped[List["Scan"]] = relationship()
-    test_id: Mapped[int] = mapped_column(db.ForeignKey("test.id"), index=True)
-
-
-class Scan(db.Model):
-    id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
-    ain0: Mapped[float] = mapped_column(db.Float)
-    ain1: Mapped[float] = mapped_column(db.Float)
-    ain2: Mapped[float] = mapped_column(db.Float)
-    stream_read_id: Mapped[int] = mapped_column(
-        db.ForeignKey("stream_read.id"), index=True
-    )
-
-
+from pint import Quantity
+from labjack import ljm
 
 
 class ConstantsService:
@@ -161,7 +25,6 @@ class ConstantsService:
             db.session.rollback()
             constants_entry = dbService.fetch_existing(Constants, constants_entry)
         return constants_entry
-    
 
     @staticmethod
     def activate(constants_id):
@@ -255,8 +118,7 @@ class LjconfigService:
 
     @staticmethod
     def get_default_window(ljconfig: Ljconfig) -> tuple[int, int]:
-        """Gets default window start and stop values for valid test data range
-        """
+        """Gets default window start and stop values for valid test data range"""
         start = ljconfig.scan_rate
         finish = int(ljconfig.buffer_size * (ljconfig.read_count - 1.8))
         return start, finish
@@ -266,7 +128,9 @@ class TestService:
     @staticmethod
     def get(test_id: int) -> Test:
         test_entry = db.session.get(Test, test_id)
-        if test_entry.ufloat_ain0 == "not analyzed":
+        if test_entry is None:
+            return None
+        elif test_entry.ufloat_ain0 == "not analyzed":
             test_entry = TestService.analyze(test_entry)
         return test_entry
 
@@ -465,7 +329,7 @@ class TestService:
 
     @staticmethod
     def get_images(t: Test) -> list[str]:
-        base = "operate"
+        base = "sendes/app"
         raw_v = f"/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_raw.png"
         delta_v = f"/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_delta.png"
 
@@ -591,7 +455,7 @@ class ResultService:
         # image 3: bar chart of relative uncertainties of each variable
         # maybe include calculation window
         # return paths in dict
-        base = "operate"
+        base = "sendes/app"
         raw_v = f"/static/results/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_raw.png"
         delta_v = f"/static/results/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_delta.png"
 
@@ -622,14 +486,15 @@ class ResultService:
 
         return [raw_v, delta_v]
 
+
 class dbService:
     # gets existing row based on unique constraint
     @staticmethod
     def fetch_existing(model, instance):
-        """ 
+        """
         Gets existing model instance with matching properties
         """
-        
+
         conditions = []
         for attr in inspect(instance).attrs:
             # Reflectively build conditions based on the object's attributes (ChatGPT)
@@ -642,7 +507,6 @@ class dbService:
             select(model).where(and_(*conditions))
         ).scalar_one()
         return instance
-    
 
     @staticmethod
     def populate_sample_data():
@@ -743,173 +607,10 @@ class dbService:
         db.session.add(constants)
         db.session.add(ljconfig)
         db.session.commit()
-
-with app.app_context():
-    db.create_all()
-    # create sample data - ljconfig, constants, test, streamreads, scan
-    # get actual values from matlab UncertaintyPropagation for voltages and constants
-    if not db.session.get(Constants, 1):
-        dbService.populate_sample_data()
-
-
-class ConstantsForm(FlaskForm):
-    piston_avg = FloatField("AVG Piston", default=3.505)
-    piston_uncertainty = FloatField("U Piston", default=0.3)
-    orifice_avg = FloatField("AVG Orifice", default=0.0127)
-    orifice_uncertainty = FloatField("U Orifice", default=0.0127)
-    rho_avg = FloatField("AVG Water Density Constant", default=1000)
-    rho_uncertainty = FloatField("U Water Density Constant", default=0)
-    pipe_avg = FloatField("AVG Pipe", default=0.0254)
-    pipe_uncertainty = FloatField("U Pipe", default=0.0254)
-    ain0_uncertainty = FloatField("U AIN0")
-    ain1_uncertainty = FloatField("U AIN1")
-    ain2_uncertainty = FloatField("U AIN2")
-    p1_slope = FloatField("P1 Slope")
-    p1_offset = FloatField("P1 Offset")
-    p2_slope = FloatField("P2 Slope")
-    p2_offset = FloatField("P2 Offset")
-    submit = SubmitField("Save Constants")
-
-
-class LjconfigForm(FlaskForm):
-    scan_rate = IntegerField("Scan Rate", default=3000)
-    read_count = IntegerField("Test Duration in .5s Increments", default=10)
-    stream_settling_us = IntegerField("Signal Settle Time in Microseconds", default=0)
-    stream_resolution_index = IntegerField(
-        "Noise Reduction", validators=[NumberRange(min=0, max=8)], default=0
-    )
-    submit = SubmitField("Save and Validate LJConfig")
-
-
-class TestBoundForm(FlaskForm):
-    window_start = IntegerField("Window Start")
-    window_finish = IntegerField("Window Finish")
-    submit = SubmitField("Update Window")
-
-
-class TestForm(FlaskForm):
-    submit = SubmitField("Execute Test")
-
-
-class ResultForm(FlaskForm):
-    test_dropdown = SelectField("Select Test")
-
-
-@app.route("/", methods=["GET", "POST"])
-def index():
-    #!!! include image of bar chart of partial derivative UMF of each variable
-    return render_template("base.html")
-
-
-@app.route("/constants", methods=["GET"])
-def get_constants():
-    constants = db.session.execute(select(Constants)).scalars()
-    return render_template("constants.html", constants=constants)
-
-
-@app.route("/constants/add", methods=["GET"])
-def constant_form():
-    constants_form = ConstantsForm()
-    return render_template("constants_add.html", constants_form=constants_form)
-
-
-@app.route("/constants/add", methods=["POST"])
-def add_constant():
-    constants_form = ConstantsForm()
-    if constants_form.validate_on_submit():
-        constants_entry = ConstantsService.create(constants_form)
-        return redirect(
-            url_for("activate_constant", constants_id=constants_entry.id), code=307
-        )
-    else:
-        return render_template("constants_add.html", constants_form=constants_form)
-
-
-@app.route("/constants/activate/<int:constants_id>", methods=["POST"])
-def activate_constant(constants_id):
-    ConstantsService.activate(constants_id)
-    return redirect(url_for("get_constants"))
-
-
-@app.route("/ljconfig", methods=["GET"])
-def get_ljconfigs():
-    ljconfigs = db.session.execute(select(Ljconfig)).scalars()
-    return render_template("ljconfig.html", ljconfigs=ljconfigs)
-
-
-@app.route("/ljconfig/add", methods=["GET"])
-def ljconfig_form():
-    ljconfig_form = LjconfigForm()
-    return render_template("ljconfig_add.html", ljconfig_form=ljconfig_form)
-
-
-@app.route("/ljconfig/add", methods=["POST"])
-def add_ljconfig():
-    ljconfig_form = LjconfigForm()
-    if ljconfig_form.validate_on_submit():
-        ljconfig_entry = LjconfigService.create(ljconfig_form)
-        return redirect(
-            url_for("activate_ljconfig", ljconfig_id=ljconfig_entry.id), code=307
-        )
-    else:
-        return render_template("ljconfig_add.html", ljconfig_form=ljconfig_form)
-
-
-@app.route("/ljconfig/activate/<int:ljconfig_id>", methods=["POST"])
-def activate_ljconfig(ljconfig_id):
-    LjconfigService.activate(ljconfig_id)
-    return redirect(url_for("get_ljconfigs"))
-
-
-@app.route("/test", methods=["GET"])
-def get_tests():
-    # display list of tests, with buttons to view result or view test
-    tests = db.session.execute(select(Test)).scalars()
-    return render_template("tests.html", tests=tests)
-
-
-@app.route("/test", methods=["POST"])
-def execute_test():
-    test_entry = TestService.execute(live=True)
-    db.session.add(test_entry)
-    db.session.commit()
-    return redirect(url_for("get_test", test_id=test_entry.id))
-
-
-@app.route("/test/<int:test_id>", methods=["GET"])
-def get_test(test_id):
-    bound_form = TestBoundForm()
-    test = TestService.get(test_id)
-    bound_form.window_start.data = test.window_start
-    bound_form.window_finish.data = test.window_finish
-    images = TestService.get_images(test)
-    return render_template("test.html", test=test, images=images, bound_form=bound_form)
-
-
-@app.route("/test/set/<int:test_id>", methods=["POST"])
-def set_test_bound(test_id):
-    referrer = request.referrer
-    if referrer:
-        bound_form = TestBoundForm()
-        if bound_form.validate_on_submit():
-            TestService.set_bounds(bound_form, test_id)
-        return redirect(referrer)
-    else:
-        return redirect(url_for("index"))
-
-
-@app.route("/results/<int:test_id>", methods=["GET"])
-def get_result(test_id):
-    cd = ResultService.analyze(test_id)
-    print(cd)
-    # display result for test with active constant applied. Provide option to
-    # use different constants
-    return render_template("result.html", test=test, cd=cd, images=images)
-
-
-@app.route("/results", methods=["GET"])
-def results():
-    tests = db.session.execute(select(Test)).scalars()
-    # show list of aggregated results with active constants applied
-    # provide option to show new constants applied with checkboxes and new constants dropdown or something
-    return render_template("results.html", tests=tests)
+    
+    @staticmethod
+    def start():
+        # create sample data - ljconfig, constants, test, streamreads, scan
+        # get actual values from matlab UncertaintyPropagation for voltages and constants
+        if  not db.session.get(Constants, 1):
+            dbService.populate_sample_data()
