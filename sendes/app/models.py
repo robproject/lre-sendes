@@ -12,9 +12,6 @@ class Constants(db.Model):
     rho_uncertainty: Mapped[float] = mapped_column(db.Float)
     pipe_avg: Mapped[float] = mapped_column(db.Float)
     pipe_uncertainty: Mapped[float] = mapped_column(db.Float)
-    ain0_uncertainty: Mapped[float] = mapped_column(db.Float)
-    ain1_uncertainty: Mapped[float] = mapped_column(db.Float)
-    ain2_uncertainty: Mapped[float] = mapped_column(db.Float)
     p1_slope: Mapped[float] = mapped_column(db.Float)
     p1_offset: Mapped[float] = mapped_column(db.Float)
     p2_slope: Mapped[float] = mapped_column(db.Float)
@@ -32,9 +29,6 @@ class Constants(db.Model):
             "rho_uncertainty",
             "pipe_avg",
             "pipe_uncertainty",
-            "ain0_uncertainty",
-            "ain1_uncertainty",
-            "ain2_uncertainty",
             "p1_slope",
             "p1_offset",
             "p2_slope",
@@ -79,6 +73,7 @@ class Test(db.Model):
     ufloat_ain0: Mapped[str] = mapped_column(db.String)
     ufloat_ain1: Mapped[str] = mapped_column(db.String)
     ufloat_ain2_diff: Mapped[str] = mapped_column(db.String)
+    cd: Mapped[str] = mapped_column(db.String)
     ljconfig_id: Mapped[int] = mapped_column(db.ForeignKey("ljconfig.id"))
     constants_id: Mapped[int] = mapped_column(db.ForeignKey("constants.id"))
     stream_reads: Mapped[list["StreamRead"]] = relationship()

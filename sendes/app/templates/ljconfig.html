@@ -10,33 +10,33 @@
     <div class="table-responsive">
         <table class="table table-striped table-hover">
         <tr>
+            <th>Status</th>
             <th>Scan Rate</th>
             <th>Read Count</th>
             <th>Stream Settling (us)</th>
             <th>Stream Res Idx</th>
-            <th>Active</th>
             <th>Valid</th>
             <th>Error Message</th>
         </tr>
         {% for l in ljconfigs %}
             <tr>
+                {% if l.is_active %}
+                    <td style="font-weight:bold; font-size:15.5pt;">ACTIVE</td>
+                {% else %}
+                    {% if l.is_valid %}
+                        <td>
+                            <form action="/ljconfig/activate/{{l.id}}" method="post">
+                                <button type="submit" class="btn btn-primary btn-sm">Activate</button>
+                            </form>
+                        </td>
+                    {% else %}
+                        <td style="font-weight:bold; font-size:15.5pt;">INVALID</td>
+                    {% endif %}
+                {% endif %}
                 <td>{{ l.scan_rate }}</td>
                 <td>{{ l.read_count }}</td>
                 <td>{{ l.stream_settling_us }}</td>
                 <td>{{ l.stream_resolution_index }}</td>
-                {% if l.is_active %}
-                    <td style="font-weight:bold; font-size:15.5pt;">ACTIVE</td>
-                {% else %}
-                {% if l.is_valid %}
-                    <td>
-                        <form action="/ljconfig/activate/{{l.id}}" method="post">
-                            <button type="submit" class="btn btn-primary btn-sm">Activate</button>
-                        </form>
-                    </td>
-                {% else %}
-                    <td style="font-weight:bold; font-size:15.5pt;">INVALID</td>
-                {% endif %}
-                {% endif %}
                 <td>{{ l.is_valid }}</td>
                 <td>{{ l.error_message }}</td>
             </tr>

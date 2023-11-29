@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 <body>
-    <div>
         {% block title %}Add LJConfig{% endblock %}
         {% block content %}
+    <div class="table-responsive">
         <form method="POST" action="/ljconfig/add">
             {{ ljconfig_form.hidden_tag() }}
-            <table>
+        <table class="table table-striped table-hover">
                 <tr>
                     <th>{{ ljconfig_form.scan_rate.label }}</th>
                     <th>{{ ljconfig_form.read_count.label }}</th>
@@ -18,8 +18,8 @@
                     <td>{{ ljconfig_form.stream_settling_us()}}</td>
                     <td>{{ ljconfig_form.stream_resolution_index()}}</td>
                 </tr>
+            {{ ljconfig_form.submit(class="btn btn-primary") }}
             </table>
-            {{ ljconfig_form.submit() }}
         </form>
         {% endblock %}
     </div>

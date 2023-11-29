@@ -4,10 +4,8 @@ from app.forms import ConstantsForm, LjconfigForm, TestBoundForm, TestForm, Resu
 from app.services import ConstantsService, LjconfigService, TestService, ResultService
 from app.models import Constants, Ljconfig, Test
 
-from flask import render_template, redirect, url_for, send_from_directory, request
+from flask import render_template, redirect, url_for, send_from_directory, request, current_app
 from sqlalchemy import select
-
-import os
 
 
 @bp.route("/", methods=["GET", "POST"])
@@ -85,9 +83,13 @@ def get_tests():
 
 @bp.route("/test", methods=["POST"])
 def execute_test():
+    if current_app.config["TESTING"]:
+        return redirect(url_for("main.get_tests"))
+    current_app.config["TESTING"] = True
     test_entry = TestService.execute(live=True)
     db.session.add(test_entry)
     db.session.commit()
+    current_app.config["TESTING"] = False
     return redirect(url_for("main.get_test", test_id=test_entry.id))
 
 

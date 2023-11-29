@@ -12,10 +12,9 @@ def create_app(config_class=Config):
 
     app.register_blueprint(bp)
 
-
-
     with app.app_context():
         db.create_all()
         from app.services import dbService
         dbService.start()
+
     return app

@@ -7,7 +7,8 @@ import sys, os
 from datetime import datetime, timedelta
 import numpy as np
 import matplotlib.pyplot as plt
-from uncertainties import ufloat, ufloat_fromstr, unumpy
+from matplotlib.axes import Axes
+from uncertainties import ufloat, ufloat_fromstr
 from pint import Quantity
 from labjack import ljm
 
@@ -235,6 +236,7 @@ class TestService:
                         ufloat_ain0="not analyzed",
                         ufloat_ain1="not analyzed",
                         ufloat_ain2_diff="not analyzed",
+                        cd="not analyzed",
                         ljconfig_id=ljconfig.id,
                         constants_id=db.session.execute(
                             select(Constants.id).where(Constants.is_active == True)
@@ -333,36 +335,76 @@ class TestService:
         raw_v = f"/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_raw.png"
         delta_v = f"/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_delta.png"
 
-        if not os.path.isfile(raw_v):
+        if not os.path.isfile(f"{base}{raw_v}"):
             tt = np.arange(
                 0, len(t.scans) * 1 / t.scan_rate_actual, 1 / t.scan_rate_actual
             )
             dtype = [(f"ain{i}", "f8") for i in range(3)]
             scans = [(s.ain0, s.ain1, s.ain2) for s in t.scans]
             scans = np.array(scans, dtype=dtype)
-            plt.clf()
-            plt.plot(tt, scans["ain0"], label="$V_{P1}$")
-            plt.plot(tt, scans["ain1"], label="$V_{P2}$")
-            plt.plot(tt, scans["ain2"], label="$V_X$")
-            plt.ylabel("Volts")
-            plt.xlabel("Time")
-            plt.legend()
+
+            fig, ax = plt.subplots()  # Create a figure and an axes object
+            ax.plot(tt, scans["ain2"], label="$V_X$")
+            ax.plot(tt, scans["ain0"], label="$V_{P1}$")
+            ax.plot(tt, scans["ain1"], label="$V_{P2}$")
+            ax.vlines(
+                x=[
+                    t.window_start / t.scan_rate_actual,
+                    t.window_finish / t.scan_rate_actual,
+                ],
+                ymin=0,
+                ymax=1,
+                colors=["black", "black"],
+            )
+            ax.set_ylabel("Volts")
+            ax.set_xlabel("Seconds")
+            ax.legend(loc="center left")
+
+            def forward(x):
+                return x * t.scan_rate_actual
+
+            def inverse(x):
+                return x / t.scan_rate_actual
+
+            secax = ax.secondary_xaxis("top", functions=(forward, inverse))
+
+            # Save the figure
             plt.savefig(f"{base}{raw_v}")
 
             tt = tt[:-1]
-            plt.clf()
-            plt.plot(tt, (scans["ain0"] - scans["ain1"])[:-1], label="$\Delta P$")
-            plt.plot(tt, np.diff(scans["ain2"]), label="$\Delta V_X$")
-            plt.ylabel("Volts")
-            plt.xlabel("Time")
-            plt.legend()
+            fig, ax = plt.subplots()
+            ax.plot(tt, np.diff(scans["ain2"]) * 50, label="$\Delta V_X$")
+            ax.plot(tt, (scans["ain0"] - scans["ain1"])[:-1], label="$\Delta P$")
+            ax.vlines(
+                x=[
+                    t.window_start / t.scan_rate_actual,
+                    t.window_finish / t.scan_rate_actual,
+                ],
+                ymin=-0.05,
+                ymax=0.55,
+                colors=["black", "black"],
+            )
+            ax.set_ylabel("Volts")
+            ax.set_xlabel("Seconds")
+            ax.legend(loc="center left")
+            secxax = ax.secondary_xaxis("top", functions=(forward, inverse))
+
+            def scaleup(y):
+                return y / 50
+
+            def scaledown(y):
+                return y * 50
+
+            secyax = ax.secondary_yaxis("right", functions=(scaleup, scaledown))
             plt.savefig(f"{base}{delta_v}")
 
         return [raw_v, delta_v]
 
     @staticmethod
     def analyze(test_entry: Test) -> Test:
-        constants = db.session.get(Constants, test_entry.constants_id)
+        """
+        Sets ufloats for ain0, ain1 and np.diff(ain2) over window
+        """
         scans = [
             (s.ain0, s.ain1, s.ain2)
             for s in test_entry.scans[
@@ -371,29 +413,15 @@ class TestService:
         ]
         dtype = [(f"ain{i}", "f8") for i in range(3)]
         scans = np.array(scans, dtype=dtype)
-        num_scans = len(scans)
+        for i in range(2):
+            setattr(
+                test_entry,
+                f"ufloat_ain{i}",
+                str(ufloat(np.average(scans[f"ain{i}"]), np.std(scans[f"ain{i}"]))),
+            )
 
-        test_entry.ufloat_ain0 = str(
-            np.average(
-                unumpy.umatrix(
-                    scans["ain0"], np.ones(num_scans) * constants.ain0_uncertainty
-                )
-            )
-        )
-        test_entry.ufloat_ain1 = str(
-            np.average(
-                unumpy.umatrix(
-                    scans["ain1"], np.ones(num_scans) * constants.ain1_uncertainty
-                )
-            )
-        )
         test_entry.ufloat_ain2_diff = str(
-            np.average(
-                unumpy.umatrix(
-                    np.diff(scans["ain2"]),
-                    np.ones(num_scans - 1) * pow(2, 0.5) * constants.ain2_uncertainty,
-                )
-            )
+            ufloat(np.average(np.diff(scans["ain2"])), np.std(np.diff(scans["ain2"])))
         )
 
         db.session.add(test_entry)
@@ -427,7 +455,10 @@ class ResultService:
         den = d2**2 * (rad_num / rad_den) ** (1 / 2)
         cd = num / den
 
-        return cd.magnitude
+        test_entry.cd = str(cd.magnitude)
+        db.session.add(test_entry)
+        db.session.commit()
+        return str(cd.magnitude)
 
     @staticmethod
     def v2p(v: Quantity, p: str, c: Constants) -> Quantity:
@@ -513,6 +544,10 @@ class dbService:
         scan_rate = 267
         stream_reads = 5
         sec_div = 2
+        ain0_uncertainty = (0.007120869,)
+        ain1_uncertainty = (0.007436709,)
+        ain2_uncertainty = (6.08881e-5,)
+
         scans_per_read = int(scan_rate / sec_div)
         constants = Constants(
             piston_avg=3.505,
@@ -523,9 +558,6 @@ class dbService:
             rho_uncertainty=0,
             pipe_avg=0.618,
             pipe_uncertainty=0.001129,
-            ain0_uncertainty=0.007120869,
-            ain1_uncertainty=0.007436709,
-            ain2_uncertainty=6.08881e-5,
             p1_slope=0.9977953,
             p1_offset=-0.008752722,
             p2_slope=1.002007,
@@ -561,6 +593,7 @@ class dbService:
             ufloat_ain0="not analyzed",
             ufloat_ain1="not analyzed",
             ufloat_ain2_diff="not analyzed",
+            cd="not analyzed",
         )
         #
         x = np.arange(0, stream_reads / sec_div, 1 / scan_rate)
@@ -581,9 +614,9 @@ class dbService:
         ain2[(x >= 2)] = 2 * 0.368 + 0.016
 
         # apply noise
-        ain0 = np.random.normal(ain0, constants.ain0_uncertainty)
-        ain1 = np.random.normal(ain1, constants.ain0_uncertainty)
-        ain2 = np.random.normal(ain2, constants.ain2_uncertainty)
+        ain0 = np.random.normal(ain0, ain0_uncertainty)
+        ain1 = np.random.normal(ain1, ain1_uncertainty)
+        ain2 = np.random.normal(ain2, ain2_uncertainty)
 
         # create stream reads and scans
         j = 1
@@ -607,10 +640,10 @@ class dbService:
         db.session.add(constants)
         db.session.add(ljconfig)
         db.session.commit()
-    
+
     @staticmethod
     def start():
         # create sample data - ljconfig, constants, test, streamreads, scan
         # get actual values from matlab UncertaintyPropagation for voltages and constants
-        if  not db.session.get(Constants, 1):
+        if not db.session.get(Constants, 1):
             dbService.populate_sample_data()
