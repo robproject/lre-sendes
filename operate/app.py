@@ -111,7 +111,6 @@ class Test(db.Model):
     scan_rate_actual: Mapped[float] = mapped_column(db.Float)
     window_start: Mapped[int] = mapped_column(db.Integer)
     window_finish: Mapped[int] = mapped_column(db.Integer)
-    window_n: Mapped[int] = mapped_column(db.Integer)
     ufloat_ain0: Mapped[str] = mapped_column(db.String)
     ufloat_ain1: Mapped[str] = mapped_column(db.String)
     ufloat_ain2_diff: Mapped[str] = mapped_column(db.String)
@@ -147,168 +146,6 @@ class Scan(db.Model):
     )
 
 
-with app.app_context():
-    db.create_all()
-    # create sample data - ljconfig, constants, test, streamreads, scan
-    # get actual values from matlab UncertaintyPropagation for voltages and constants
-    if not db.session.get(Constants, 1):
-        scan_rate = 267
-        stream_reads = 5
-        sec_div = 2
-        scans_per_read = int(scan_rate / sec_div)
-        constants = Constants(
-            piston_avg=3.505,
-            piston_uncertainty=0.002284631,
-            orifice_avg=0.238,
-            orifice_uncertainty=7.84915e-4,
-            rho_avg=1000,
-            rho_uncertainty=0,
-            pipe_avg=0.618,
-            pipe_uncertainty=0.001129,
-            ain0_uncertainty=0.007120869,
-            ain1_uncertainty=0.007436709,
-            ain2_uncertainty=6.08881e-5,
-            p1_slope=0.9977953,
-            p1_offset=-0.008752722,
-            p2_slope=1.002007,
-            p2_offset=0.1061045,
-            is_active=True,
-        )
-        ljconfig = Ljconfig(
-            scan_rate=scan_rate,
-            scan_rate_actual=scan_rate,
-            buffer_size=scans_per_read,
-            read_count=stream_reads,
-            ain_all_negative_ch=ljm.constants.GND,
-            stream_settling_us=0,
-            stream_resolution_index=8,
-            is_active=True,
-            is_valid=True,
-            error_message="None",
-        )
-        t = datetime.now()
-        test = Test(
-            start=str(t),
-            finish=str(t + timedelta(seconds=stream_reads / sec_div)),
-            duration=str(
-                (timedelta(seconds=stream_reads / sec_div)).seconds
-                + float((timedelta(seconds=stream_reads / sec_div)).microseconds)
-                / 1000000
-            ),
-            scan_rate_actual=scan_rate,
-            window_start=scan_rate,
-            window_finish=int(scans_per_read * (stream_reads - 1.8)),
-            window_n=int(int(scans_per_read * (stream_reads - 1.8)) - scan_rate),
-            ufloat_ain0="not analyzed",
-            ufloat_ain1="not analyzed",
-            ufloat_ain2_diff="not analyzed",
-        )
-        #
-        x = np.arange(0, stream_reads / sec_div, 1 / scan_rate)
-        # sample test data
-        ain0, ain1, ain2 = np.ones_like(x), np.ones_like(x), np.ones_like(x)
-        # ain0 = P1
-        ain0[:] = 0.9451
-        # ain1 = P2
-        ain1[(x < 0.5)] = 0.9451
-        ain1[(x >= 0.5) & (x < 1)] = (
-            -(0.9451 - 0.471) / 0.5 * x[(x >= 0.5) & (x < 1)] + 0.9451 + 0.9451 - 0.471
-        )
-        ain1[(x >= 1) & (x < 2)] = 0.471
-        ain1[(x >= 2)] = (0.9451 - 0.471) / 0.5 * x[(x >= 2)] - 1.4254
-        # ain2 = x
-        ain2[(x < 0.5)] = 0.2
-        ain2[(x >= 0.5) & (x < 2)] = x[(x >= 0.5) & (x < 2)] * 0.368 + 0.016
-        ain2[(x >= 2)] = 2 * 0.368 + 0.016
-
-        # apply noise
-        ain0 = np.random.normal(ain0, constants.ain0_uncertainty)
-        ain1 = np.random.normal(ain1, constants.ain0_uncertainty)
-        ain2 = np.random.normal(ain2, constants.ain2_uncertainty)
-
-        # create stream reads and scans
-        j = 1
-        for k in range(5):
-            i = k * 0.5
-            stream_read = StreamRead(stream_i=j, skipped=0, lj_backlog=0, ljm_backlog=0)
-            j += 1
-            stream_read.scans = [
-                Scan(ain0=x, ain1=y, ain2=z)
-                for x, y, z in zip(
-                    ain0[(i < x) & (i + 0.5 > x)],
-                    ain1[(i < x) & (i + 0.5 > x)],
-                    ain2[(i < x) & (i + 0.5 > x)],
-                )
-            ]
-            test.stream_reads.append(stream_read)
-
-        constants.tests = [test]
-        ljconfig.tests = [test]
-        db.session.add(test)
-        db.session.add(constants)
-        db.session.add(ljconfig)
-        db.session.commit()
-
-
-class ConstantsForm(FlaskForm):
-    piston_avg = FloatField("AVG Piston", default=3.505)
-    piston_uncertainty = FloatField("U Piston", default=0.3)
-    orifice_avg = FloatField("AVG Orifice", default=0.0127)
-    orifice_uncertainty = FloatField("U Orifice", default=0.0127)
-    rho_avg = FloatField("AVG Water Density Constant", default=1000)
-    rho_uncertainty = FloatField("U Water Density Constant", default=0)
-    pipe_avg = FloatField("AVG Pipe", default=0.0254)
-    pipe_uncertainty = FloatField("U Pipe", default=0.0254)
-    ain0_uncertainty = FloatField("U AIN0")
-    ain1_uncertainty = FloatField("U AIN1")
-    ain2_uncertainty = FloatField("U AIN2")
-    p1_slope = FloatField("P1 Slope")
-    p1_offset = FloatField("P1 Offset")
-    p2_slope = FloatField("P2 Slope")
-    p2_offset = FloatField("P2 Offset")
-    submit = SubmitField("Save Constants")
-
-
-class LjconfigForm(FlaskForm):
-    scan_rate = IntegerField("Scan Rate", default=3000)
-    read_count = IntegerField("Test Duration in .5s Increments", default=10)
-    stream_settling_us = IntegerField("Signal Settle Time in Microseconds", default=0)
-    stream_resolution_index = IntegerField(
-        "Noise Reduction", validators=[NumberRange(min=0, max=8)], default=0
-    )
-    submit = SubmitField("Save and Validate LJConfig")
-
-
-class TestBoundForm(FlaskForm):
-    window_start = IntegerField("Window Start")
-    window_finish = IntegerField("Window Finish")
-    submit = SubmitField("Update Window")
-
-
-class TestForm(FlaskForm):
-    submit = SubmitField("Execute Test")
-
-
-class ResultForm(FlaskForm):
-    test_dropdown = SelectField("Select Test")
-
-
-class dbService:
-    # gets existing row based on unique constraint
-    @staticmethod
-    def fetch_existing(model, instance):
-        conditions = []
-        for attr in inspect(instance).attrs:
-            # Reflectively build conditions based on the object's attributes (ChatGPT)
-            # only constrained fields
-            if attr.key in {c.name for c in model.__table_args__[0].columns}:
-                conditions.append(
-                    getattr(model, attr.key) == getattr(instance, attr.key)
-                )
-        instance = db.session.execute(
-            select(model).where(and_(*conditions))
-        ).scalar_one()
-        return instance
 
 
 class ConstantsService:
@@ -324,6 +161,7 @@ class ConstantsService:
             db.session.rollback()
             constants_entry = dbService.fetch_existing(Constants, constants_entry)
         return constants_entry
+    
 
     @staticmethod
     def activate(constants_id):
@@ -414,6 +252,14 @@ class LjconfigService:
         db.session.add(ljconfig_entry)
         db.session.commit()
         return ljconfig_entry
+
+    @staticmethod
+    def get_default_window(ljconfig: Ljconfig) -> tuple[int, int]:
+        """Gets default window start and stop values for valid test data range
+        """
+        start = ljconfig.scan_rate
+        finish = int(ljconfig.buffer_size * (ljconfig.read_count - 1.8))
+        return start, finish
 
 
 class TestService:
@@ -514,17 +360,14 @@ class TestService:
 
                 if i == 1 and aData:
                     # initialize test db entry
+                    w_start, w_finish = LjconfigService.get_default_window(ljconfig)
                     test_entry = Test(
                         start=start.isoformat(),
                         finish="test incomplete",
                         duration=0,
                         scan_rate_actual=0.0,
-                        window_start=int(scansPerRead * 2),
-                        window_finish=int(scansPerRead * (MAX_REQUESTS - 1.8)),
-                        window_n=int(
-                            int(scansPerRead * (MAX_REQUESTS - 1.8))
-                            - ljconfig.scan_rate
-                        ),
+                        window_start=w_start,
+                        window_finish=w_finish,
                         ufloat_ain0="not analyzed",
                         ufloat_ain1="not analyzed",
                         ufloat_ain2_diff="not analyzed",
@@ -665,7 +508,6 @@ class TestService:
         dtype = [(f"ain{i}", "f8") for i in range(3)]
         scans = np.array(scans, dtype=dtype)
         num_scans = len(scans)
-        test_entry.window_n = num_scans - 1
 
         test_entry.ufloat_ain0 = str(
             np.average(
@@ -741,6 +583,7 @@ class ResultService:
 
     @staticmethod
     def get_images(test_id):
+        # !!!
         # check if images exist, render if not
         # image 1: cd with dp and dxdt, include shaded region for +/-stdev
         # https://stackoverflow.com/a/43069856/14410691
@@ -778,7 +621,178 @@ class ResultService:
             plt.savefig(f"{base}{delta_v}")
 
         return [raw_v, delta_v]
-        pass
+
+class dbService:
+    # gets existing row based on unique constraint
+    @staticmethod
+    def fetch_existing(model, instance):
+        """ 
+        Gets existing model instance with matching properties
+        """
+        
+        conditions = []
+        for attr in inspect(instance).attrs:
+            # Reflectively build conditions based on the object's attributes (ChatGPT)
+            # only constrained fields
+            if attr.key in {c.name for c in model.__table_args__[0].columns}:
+                conditions.append(
+                    getattr(model, attr.key) == getattr(instance, attr.key)
+                )
+        instance = db.session.execute(
+            select(model).where(and_(*conditions))
+        ).scalar_one()
+        return instance
+    
+
+    @staticmethod
+    def populate_sample_data():
+        scan_rate = 267
+        stream_reads = 5
+        sec_div = 2
+        scans_per_read = int(scan_rate / sec_div)
+        constants = Constants(
+            piston_avg=3.505,
+            piston_uncertainty=0.002284631,
+            orifice_avg=0.238,
+            orifice_uncertainty=7.84915e-4,
+            rho_avg=1000,
+            rho_uncertainty=0,
+            pipe_avg=0.618,
+            pipe_uncertainty=0.001129,
+            ain0_uncertainty=0.007120869,
+            ain1_uncertainty=0.007436709,
+            ain2_uncertainty=6.08881e-5,
+            p1_slope=0.9977953,
+            p1_offset=-0.008752722,
+            p2_slope=1.002007,
+            p2_offset=0.1061045,
+            is_active=True,
+        )
+        ljconfig = Ljconfig(
+            scan_rate=scan_rate,
+            scan_rate_actual=scan_rate,
+            buffer_size=scans_per_read,
+            read_count=stream_reads,
+            ain_all_negative_ch=ljm.constants.GND,
+            stream_settling_us=0,
+            stream_resolution_index=8,
+            is_active=True,
+            is_valid=True,
+            error_message="None",
+        )
+
+        t = datetime.now()
+        w_start, w_finish = LjconfigService.get_default_window(ljconfig)
+        test = Test(
+            start=str(t),
+            finish=str(t + timedelta(seconds=stream_reads / sec_div)),
+            duration=str(
+                (timedelta(seconds=stream_reads / sec_div)).seconds
+                + float((timedelta(seconds=stream_reads / sec_div)).microseconds)
+                / 1000000
+            ),
+            scan_rate_actual=scan_rate,
+            window_start=w_start,
+            window_finish=w_finish,
+            ufloat_ain0="not analyzed",
+            ufloat_ain1="not analyzed",
+            ufloat_ain2_diff="not analyzed",
+        )
+        #
+        x = np.arange(0, stream_reads / sec_div, 1 / scan_rate)
+        # sample test data
+        ain0, ain1, ain2 = np.ones_like(x), np.ones_like(x), np.ones_like(x)
+        # ain0 = P1
+        ain0[:] = 0.9451
+        # ain1 = P2
+        ain1[(x < 0.5)] = 0.9451
+        ain1[(x >= 0.5) & (x < 1)] = (
+            -(0.9451 - 0.471) / 0.5 * x[(x >= 0.5) & (x < 1)] + 0.9451 + 0.9451 - 0.471
+        )
+        ain1[(x >= 1) & (x < 2)] = 0.471
+        ain1[(x >= 2)] = (0.9451 - 0.471) / 0.5 * x[(x >= 2)] - 1.4254
+        # ain2 = x
+        ain2[(x < 0.5)] = 0.2
+        ain2[(x >= 0.5) & (x < 2)] = x[(x >= 0.5) & (x < 2)] * 0.368 + 0.016
+        ain2[(x >= 2)] = 2 * 0.368 + 0.016
+
+        # apply noise
+        ain0 = np.random.normal(ain0, constants.ain0_uncertainty)
+        ain1 = np.random.normal(ain1, constants.ain0_uncertainty)
+        ain2 = np.random.normal(ain2, constants.ain2_uncertainty)
+
+        # create stream reads and scans
+        j = 1
+        for k in range(5):
+            i = k * 0.5
+            stream_read = StreamRead(stream_i=j, skipped=0, lj_backlog=0, ljm_backlog=0)
+            j += 1
+            stream_read.scans = [
+                Scan(ain0=x, ain1=y, ain2=z)
+                for x, y, z in zip(
+                    ain0[(i < x) & (i + 0.5 > x)],
+                    ain1[(i < x) & (i + 0.5 > x)],
+                    ain2[(i < x) & (i + 0.5 > x)],
+                )
+            ]
+            test.stream_reads.append(stream_read)
+
+        constants.tests = [test]
+        ljconfig.tests = [test]
+        db.session.add(test)
+        db.session.add(constants)
+        db.session.add(ljconfig)
+        db.session.commit()
+
+with app.app_context():
+    db.create_all()
+    # create sample data - ljconfig, constants, test, streamreads, scan
+    # get actual values from matlab UncertaintyPropagation for voltages and constants
+    if not db.session.get(Constants, 1):
+        dbService.populate_sample_data()
+
+
+class ConstantsForm(FlaskForm):
+    piston_avg = FloatField("AVG Piston", default=3.505)
+    piston_uncertainty = FloatField("U Piston", default=0.3)
+    orifice_avg = FloatField("AVG Orifice", default=0.0127)
+    orifice_uncertainty = FloatField("U Orifice", default=0.0127)
+    rho_avg = FloatField("AVG Water Density Constant", default=1000)
+    rho_uncertainty = FloatField("U Water Density Constant", default=0)
+    pipe_avg = FloatField("AVG Pipe", default=0.0254)
+    pipe_uncertainty = FloatField("U Pipe", default=0.0254)
+    ain0_uncertainty = FloatField("U AIN0")
+    ain1_uncertainty = FloatField("U AIN1")
+    ain2_uncertainty = FloatField("U AIN2")
+    p1_slope = FloatField("P1 Slope")
+    p1_offset = FloatField("P1 Offset")
+    p2_slope = FloatField("P2 Slope")
+    p2_offset = FloatField("P2 Offset")
+    submit = SubmitField("Save Constants")
+
+
+class LjconfigForm(FlaskForm):
+    scan_rate = IntegerField("Scan Rate", default=3000)
+    read_count = IntegerField("Test Duration in .5s Increments", default=10)
+    stream_settling_us = IntegerField("Signal Settle Time in Microseconds", default=0)
+    stream_resolution_index = IntegerField(
+        "Noise Reduction", validators=[NumberRange(min=0, max=8)], default=0
+    )
+    submit = SubmitField("Save and Validate LJConfig")
+
+
+class TestBoundForm(FlaskForm):
+    window_start = IntegerField("Window Start")
+    window_finish = IntegerField("Window Finish")
+    submit = SubmitField("Update Window")
+
+
+class TestForm(FlaskForm):
+    submit = SubmitField("Execute Test")
+
+
+class ResultForm(FlaskForm):
+    test_dropdown = SelectField("Select Test")
 
 
 @app.route("/", methods=["GET", "POST"])
