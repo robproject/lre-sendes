@@ -89,6 +89,7 @@ def execute_test():
     test_entry = TestService.execute(live=True)
     db.session.add(test_entry)
     db.session.commit()
+    test_entry = TestService.analyze(test_entry)
     current_app.config["TESTING"] = False
     return redirect(url_for("main.get_test", test_id=test_entry.id))
 

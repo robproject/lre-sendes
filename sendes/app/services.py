@@ -237,7 +237,7 @@ class TestService:
                         ufloat_vp1="not analyzed",
                         ufloat_vp2="not analyzed",
                         ufloat_vdx="not analyzed",
-                        cd="not analyzed",
+                        ufloat_cd="not analyzed",
                         ljconfig_id=ljconfig.id,
                         constants_id=db.session.execute(
                             select(Constants.id).where(Constants.is_active == True)
