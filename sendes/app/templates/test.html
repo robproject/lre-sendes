@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+<body>
+    <div>
+        {% block title %}Tests{% endblock %}
+        {% block content %}
+            <form action="/test/set/{{test.id}}" method="post">
+                {{ bound_form.hidden_tag() }}
+                <table>
+                    <tr>
+                        <th>{{ bound_form.window_start.label }}</th>
+                        <th>{{ bound_form.window_finish.label }}</th>
+                    </tr>
+                    <tr>
+                        <th>{{ bound_form.window_start() }}</th>
+                        <th>{{ bound_form.window_finish() }}</th>
+                    </tr>
+                </table>
+                <div class="mb-2">
+                {{ bound_form.submit(class="btn btn-primary") }}
+                </div>
+            </form>
+            <div>AIN0: {{ test.ufloat_vp1 }}</div>
+            <div>AIN1: {{ test.ufloat_vp2 }}</div>
+            <div>AIN2: {{ test.ufloat_vdx }}</div>
+            <h3>Cd: {{ cd }}</h3>
+            <img src="{{ images[0] }}">
+            <img src="{{ images[1] }}">
+        {% endblock %}
+    </div>
+</body>

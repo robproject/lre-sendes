@@ -14,13 +14,13 @@ import os
 from labjack import ljm
 import numpy as np
 import matplotlib.pyplot as plt
-
-IMG_FOLDER = os.path.join("sendes", "assets")
+from rich.console import Console
 
 
 app = Flask(__name__)
-app.config["PNG_FOLDER"] = IMG_FOLDER
+app.config["SQLALCHEMY_ECHO"] = True
 
+console = Console()
 
 class Base(DeclarativeBase):
     pass
@@ -73,6 +73,8 @@ class Ljconfig(db.Model):
             "scan_rate",
             "read_count",
             "ain0_range",
+            "ain1_range",
+            "ain2_range",
             "stream_settling_us",
             "stream_resolution_index",
             name="uq_ljconfig",
@@ -100,7 +102,7 @@ class StreamRead(db.Model):
     lj_backlog: Mapped[int] = mapped_column(db.Integer)
     ljm_backlog: Mapped[int] = mapped_column(db.Integer)
     scans: Mapped[List["Scan"]] = relationship()
-    test_id: Mapped[int] = mapped_column(db.ForeignKey("test.id"))
+    test_id: Mapped[int] = mapped_column(db.ForeignKey("test.id"), index=True)
 
 
 class Scan(db.Model):
@@ -108,7 +110,7 @@ class Scan(db.Model):
     ain0: Mapped[float] = mapped_column(db.Float)
     ain1: Mapped[float] = mapped_column(db.Float)
     ain2: Mapped[float] = mapped_column(db.Float)
-    stream_read_id: Mapped[int] = mapped_column(db.ForeignKey("stream_read.id"))
+    stream_read_id: Mapped[int] = mapped_column(db.ForeignKey("stream_read.id"), index=True)
 
 
 class Result(db.Model):
@@ -119,7 +121,7 @@ class Result(db.Model):
     p2: Mapped[float] = mapped_column(db.Float)
     cd: Mapped[float] = mapped_column(db.Float)
 
-    test_id: Mapped[int] = mapped_column(db.ForeignKey("test.id"))
+    test_id: Mapped[int] = mapped_column(db.ForeignKey("test.id"), index=True)
 
 
 with app.app_context():
@@ -146,6 +148,8 @@ class LJConfigForm(FlaskForm):
         "Noise Reduction", validators=[NumberRange(min=0, max=8)], default=0
     )
     ain0_range = SelectField("AIN0 Gain", choices=[10, 1, 0.1, 0.01], default=10)
+    ain1_range = SelectField("AIN1 Gain", choices=[10, 1, 0.1, 0.01], default=10)
+    ain2_range = SelectField("AIN2 Gain", choices=[1, 10, 0.1, 0.01], default=1)
 
     ljconfig_dropdown = SelectField("Select LJ Config")
 
@@ -189,6 +193,8 @@ def index():
         ljconfig_form.stream_settling_us.data = ljconfig.stream_settling_us
         ljconfig_form.stream_resolution_index.data = ljconfig.stream_resolution_index
         ljconfig_form.ain0_range.data = ljconfig.ain0_range
+        ljconfig_form.ain1_range.data = ljconfig.ain1_range
+        ljconfig_form.ain2_range.data = ljconfig.ain2_range
 
     if "test_dropdown" in request.form:
         # render test
@@ -203,6 +209,8 @@ def index():
         ljconfig_form.stream_settling_us.data = ljconfig.stream_settling_us
         ljconfig_form.stream_resolution_index.data = ljconfig.stream_resolution_index
         ljconfig_form.ain0_range.data = ljconfig.ain0_range
+        ljconfig_form.ain1_range.data = ljconfig.ain1_range
+        ljconfig_form.ain2_range.data = ljconfig.ain2_range
         constants_form.id.data = constants.id
         constants_form.piston_rad.data = constants.piston_rad
         constants_form.orifice_id.data = constants.orifice_id
@@ -236,6 +244,8 @@ def index():
         ljconfig_form.stream_settling_us.data = ljconfig.stream_settling_us
         ljconfig_form.stream_resolution_index.data = ljconfig.stream_resolution_index
         ljconfig_form.ain0_range.data = ljconfig.ain0_range
+        ljconfig_form.ain1_range.data = ljconfig.ain1_range
+        ljconfig_form.ain2_range.data = ljconfig.ain2_range
         constants_form.id.data = constants.id
         constants_form.piston_rad.data = constants.piston_rad
         constants_form.orifice_id.data = constants.orifice_id
@@ -253,7 +263,7 @@ def index():
 
     recent_ljconfigs = Ljconfig.query.order_by(Ljconfig.id.asc()).all()
     ljconfig_form.ljconfig_dropdown.choices = [
-        f"{ljc.id} {ljc.scan_rate} {ljc.read_count} {ljc.stream_settling_us} {ljc.stream_resolution_index} {ljc.ain0_range}"
+        f"{ljc.id} {ljc.scan_rate} {ljc.read_count} {ljc.stream_settling_us} {ljc.stream_resolution_index} {ljc.ain0_range} {ljc.ain1_range} {ljc.ain2_range}"
         for ljc in recent_ljconfigs
     ]
 
@@ -301,9 +311,9 @@ def execute_test(config_dict):
         # Open first found LabJack
         handle = ljm.openS()
         info = ljm.getHandleInfo(handle)
-        print(
-            f"Opened a LabJack with Device type: {info[0]}, Connection type: {info[1]},\n"
-            f"Serial number: {info[2]}, IP address: {info[3]}, Port: {info[4]},\nMax bytes per MB: {info[5]}"
+        console.print(
+            f"\nOpened a LabJack with Device type: {info[0]}, Connection type: {info[1]},\n"
+            f"Serial number: {info[2]}, IP address: {info[3]}, Port: {info[4]},\nMax bytes per MB: {info[5]}", style="magenta"
         )
 
         # Stream Configuration
@@ -313,7 +323,7 @@ def execute_test(config_dict):
 
         # ljm config
         scanRate = int(config_dict["scan_rate"])
-        scansPerRead = int(scanRate / 2)
+        scansPerRead = int(scanRate/2)
         MAX_REQUESTS = config_dict[
             "read_count"
         ]  # The number of eStreamRead calls that will be performed.
@@ -329,10 +339,10 @@ def execute_test(config_dict):
         aConfig = {
             "AIN_ALL_NEGATIVE_CH": ljm.constants.GND,
             "AIN0_RANGE": config_dict["ain0_range"],
-            "AIN1_RANGE": 10.0,
-            "AIN2_RANGE": 10.0,
-            "STREAM_SETTLING_US": config_dict["stream_settling_us"],
-            "STREAM_RESOLUTION_INDEX": config_dict["stream_resolution_index"],
+            "AIN1_RANGE": config_dict["ain1_range"],
+            "AIN2_RANGE": config_dict["ain2_range"],
+            "STREAM_SETTLING_US": int(config_dict["stream_settling_us"]),
+            "STREAM_RESOLUTION_INDEX": int(config_dict["stream_resolution_index"]),
         }
 
         ljconfig_dict = {
@@ -381,10 +391,10 @@ def execute_test(config_dict):
 
             # start test
             ljm.eWriteName(handle, "DAC0", 5)
-            print(
+            console.print(
                 "valve opened"
                 f"\nStream started with a scan rate of {scanRate:.2f} Hz."
-                f"\nPerforming {MAX_REQUESTS} stream reads."
+                f"\nPerforming {MAX_REQUESTS} stream reads.\n", style="magenta"
             )
 
             ljmScanBacklog = 0
@@ -395,11 +405,16 @@ def execute_test(config_dict):
                 # stop test
                 if i == MAX_REQUESTS:
                     ljm.eWriteName(handle, "DAC0", 0)
-                    print("valve closed")
+                    console.print("valve closed", style="magenta")
 
                 ret = ljm.eStreamRead(handle)
+                aData = ret[0]
+                ljScanBacklog = ret[1]
+                ljmScanBacklog = ret[2]
+                scans = len(aData) / numAddresses
+                totScans += scans
 
-                if i == 1 and ret[0]:
+                if i == 1 and aData:
                     # commit constant and config entries
                     try:
                         db.session.add(constants_entry)
@@ -432,11 +447,6 @@ def execute_test(config_dict):
                     db.session.add(test_entry)
                     db.session.commit()
 
-                aData = ret[0]
-                ljScanBacklog = ret[1]
-                ljmScanBacklog = ret[2]
-                scans = len(aData) / numAddresses
-                totScans += scans
 
                 # Count the skipped samples which are indicated by -9999 values. Missed
                 # samples occur after a device's stream buffer overflows and are
@@ -467,9 +477,10 @@ def execute_test(config_dict):
                     scan_objects.append(scan_entry)
                 db.session.execute(db.insert(Scan), scan_objects)
 
-                print(
+                console.print(
                     f"\neStreamRead {i}"
-                    f"  Scans Skipped = {skipped}, Scan Backlogs: Device = {ljScanBacklog}, LJM = {ljmScanBacklog}"
+                    f"\nScans Skipped = {skipped}, Scan Backlogs: Device = {ljScanBacklog}, LJM = {ljmScanBacklog}\n",
+                    style="magenta"
                 )
 
                 i += 1
@@ -483,39 +494,39 @@ def execute_test(config_dict):
             test_entry.scan_rate_actual = scanRate
             db.session.commit()
 
-            print(
+            console.print(
                 f"\nTotal scans = {totScans}"
                 f"\nTime taken = {tt:.2f} seconds"
                 f"\nLJM Scan Rate = {scanRate:.1f} scans/second"
                 f"\nTimed Scan Rate = {totScans/tt:.2f} scans/second"
                 f"\nTimed Sample Rate = {totScans*numAddresses/tt:.1f} samples/second"
-                f"\nSkipped scans = {totSkip/numAddresses}"
+                f"\nSkipped scans = {totSkip/numAddresses}", style = "magenta"
             )
 
         except ljm.LJMError:
             ljme = sys.exc_info()[1]
             ljm.eWriteName(handle, "DAC0", 0)
-            print(f"valve closed\n {ljme}")
+            console.print(f"valve closed\n {ljme}", style="magenta")
             ljm.close(handle)
             return f"{ljme}"
         except Exception:
             e = sys.exc_info()[1]
             ljm.eWriteName(handle, "DAC0", 0)
-            print(f"valve closed\n {e}")
+            console.print(f"valve closed\n {e}", style="magenta")
             ljm.close(handle)
             return f"{e}"
 
         try:
-            print("\nStop Stream")
+            console.print("\nStop Stream\n", style="magenta")
             ljm.eStreamStop(handle)
         except ljm.LJMError:
             ljme = sys.exc_info()[1]
-            print(ljme)
+            console.print(ljme, style="magenta")
             ljm.close(handle)
             return f"{ljme}"
         except Exception:
             e = sys.exc_info()[1]
-            print(e)
+            console.print(e, style="magenta")
             ljm.close(handle)
             return f"{e}"
 
@@ -546,9 +557,9 @@ def calc_results(test_id):
     for i in range(0, len(scans), window_size):
         window = scans_np[i : i + window_size]
         result_entry = {
-            "p1": window["ain0"].mean(),
-            "p2": window["ain1"].mean(),
-            "x": np.diff(window["ain2"]).mean(),
+            "p1": window["ain0"].mean() * constants.v2p,
+            "p2": window["ain1"].mean() * constants.v2p,
+            "x": sum(np.diff(window["ain2"])) * constants.v2l,
             "t": window_size * 1 / test_instance.scan_rate_actual,
             "test_id": test_id,
         }
@@ -580,18 +591,23 @@ def get_cd(r: dict, c: Constants):
 
 def generate_plot(test_id):
     results = Result.query.filter_by(test_id=test_id).all()
+    
     t = []
-    ts = 0
+    dt = 0
     x = []
-    p1 = []
-    p2 = []
+    dx = 0
+    dx_plot = []
+    p1 = np.array([])
+    p2 = np.array([])
     cd = []
-    for i, r in enumerate(results):
-        t.append(ts)
-        ts += r.t
-        x.append(r.x)
-        p1.append(r.p1)
-        p2.append(r.p2)
+    for r in results:
+        t.append(dt)
+        dt += r.t
+        x.append(dx)
+        dx += (r.x)
+        dx_plot.append(r.x)
+        p1 = np.append(p1,r.p1)
+        p2 = np.append(p2,r.p2)
         cd.append(r.cd)
 
     img_name = f"{test_id}.png"
@@ -599,10 +615,12 @@ def generate_plot(test_id):
     test_instance.result_imgpath = img_name
 
     plt.clf()
-    plt.plot(t, x, label="Position")
-    plt.plot(t, p1, label="P1")
-    plt.plot(t, p2, label="P2")
-    plt.plot(t, cd, label="Cd")
+    plt.plot(t, x, label="$X$")
+    plt.plot(t, dx_plot, label="$\Delta X$")
+    plt.plot(t, p1, label="$P_1$")
+    plt.plot(t, p2, label="$P_2$")
+    plt.plot(t, list(p1-p2), label="$\Delta P$")
+    plt.plot(t, cd, label="$C_d$")
     plt.legend()
     plt.xlabel("Time")
     plt.savefig(f"sendes/static/{img_name}")

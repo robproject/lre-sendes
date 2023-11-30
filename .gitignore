@@ -9,12 +9,16 @@ __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
+*.venv
 dist/
 build/
 
 # app
-instance
-static
+*.db
+/archive/sendes/static/*
+/sendes/app/static/*
+
+!/sendes/app/static/favicon/
 
 # OS
 .DS_Store

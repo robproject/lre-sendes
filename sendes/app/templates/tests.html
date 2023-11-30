@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+<body>
+    <div>
+        {% block title %}Tests{% endblock %}
+        {% block content %}
+            <form action="/test" method="post">
+                <input type="submit" class="btn btn-primary" value="Run Test">
+            </form>
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+                <tr>
+                    <th>Link</th>
+                    <th>Id</th>
+                    <th>Start</th>
+                    <th>Finish</th>
+                    <th>Duration</th>
+                    <th>Actual Scan Rate</th>
+                    <th>Cd</th>
+                    <th>LJConifg Id</th>
+                    <th>Constants Id</th>
+                </tr>
+                {% for t in tests %}
+                    <tr>
+                        <td><a class="btn btn-primary" href="/test/{{t.id}}">View</a></td>
+                        <td>{{ t.id }}</td>
+                        <td>{{ t.start }}</td>
+                        <td>{{ t.finish }}</td>
+                        <td>{{ t.duration }}</td>
+                        <td>{{ t.scan_rate_actual }}</td>
+                        <td>{{ t.ufloat_cd }}</td>
+                        <td>{{ t.ljconfig_id }}</td>
+                        <td>{{ t.constants_id }}</td>
+                    </tr>
+                {% endfor %}
+            </table>
+        {% endblock %}
+    </div>
+</body>

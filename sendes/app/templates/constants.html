@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+<body>
+    <div>
+        {% block title %}Constants{% endblock %}
+        {% block content %}
+        <form action="/constants/add">
+            <input type="submit" class="btn btn-primary" value="Add Constants">
+        </form>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+        <tr>
+            <th>Status</th>
+            <th>Piston Avg"</th>
+            <th>± Piston Uncertainty"</th>
+            <th>Orifice Avg"</th>
+            <th>± Orifice Uncertainty"</th>
+            <th>Pipe Avg"</th>
+            <th>± Pipe Uncertainty"</th>
+        </tr>
+        <tr>
+            <th>P1 Slope</th>
+            <th>P1 Offset psi</th>
+            <th>P2 Slope</th>
+            <th>P2 Offset psi</th>
+            <th>Rho Avg kg/m3</th>
+            <th>± Rho Uncertainty kg/m3</th>
+        </tr>
+        {% for c in constants %}
+            <tr>
+                {% if c.is_active %}
+                    <td style="font-weight:bold; font-size:15.5pt;">ACTIVE</td>
+                {% else %}
+                    <td>
+                        <form action="/constants/activate/{{c.id}}" method="post">
+                            <button type="submit" class="btn btn-primary btn-sm">Activate</button>
+                        </form>
+                    </td>
+                {% endif %}
+                <td>{{ c.piston_avg }}"</td>
+                <td>±{{ c.piston_uncertainty }}"</td>
+                <td>{{ c.orifice_avg }}"</td>
+                <td>±{{ c.orifice_uncertainty }}"</td>
+                <td>{{ c.pipe_avg }}"</td>
+                <td>±{{ c.pipe_uncertainty }}"</td>
+            </tr>
+            <tr>
+                <td>{{ c.p1_slope }}</td>
+                <td>{{ c.p1_offset }} psi</td>
+                <td>{{ c.p2_slope }}</td>
+                <td>{{ c.p2_offset }} psi</td>
+                <td>{{ c.rho_avg }} kg/m3</td>
+                <td>±{{ c.rho_uncertainty }} kg/m3</td>
+            </tr>
+        {% endfor %}
+        </table>
+        {% endblock %}
+    </div>
+</body>

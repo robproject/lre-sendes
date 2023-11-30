@@ -7,6 +7,5 @@ Assuming python3 is already installed:
 git clone https://robproject/lre-sendes
 cd lre-sendes
 pip install -r sendes/requirements.txt
-export FLASK_APP=sendes/app FLASK_ENV=development FLASK_DEBUG=1 SECRET_KEY=my_key
-flask run
+flask -app sendes/app run
 ``````

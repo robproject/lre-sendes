@@ -11,11 +11,12 @@
             "module": "flask",
             "env": {
                 "FLASK_APP": "sendes/app",
-                "FLASK_DEBUG": "1"
+                "FLASK_ENV": "development",
+                "FLASK_DEBUG": "1",
+                "SECRET_KEY": "ok"
             },
             "args": [
-                "run",
-                "--no-reload"
+                "run"
             ],
             "jinja": true,
             "justMyCode": true
