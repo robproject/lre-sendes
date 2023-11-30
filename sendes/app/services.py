@@ -131,8 +131,9 @@ class TestService:
         test_entry = db.session.get(Test, test_id)
         if test_entry is None:
             return None
-        elif test_entry.ufloat_ain0 == "not analyzed":
+        elif test_entry.ufloat_vp1 == "not analyzed":
             test_entry = TestService.analyze(test_entry)
+            test_entry = ResultService.analyze(test_entry.id)
         return test_entry
 
     @staticmethod
@@ -233,9 +234,9 @@ class TestService:
                         scan_rate_actual=0.0,
                         window_start=w_start,
                         window_finish=w_finish,
-                        ufloat_ain0="not analyzed",
-                        ufloat_ain1="not analyzed",
-                        ufloat_ain2_diff="not analyzed",
+                        ufloat_vp1="not analyzed",
+                        ufloat_vp2="not analyzed",
+                        ufloat_vdx="not analyzed",
                         cd="not analyzed",
                         ljconfig_id=ljconfig.id,
                         constants_id=db.session.execute(
@@ -328,9 +329,14 @@ class TestService:
         test_entry = db.session.get(Test, test_id)
         bound_form.populate_obj(test_entry)
         test_entry = TestService.analyze(test_entry)
+        test_entry = ResultService.analyze(test_entry.id)
 
     @staticmethod
     def get_images(t: Test) -> list[str]:
+        """
+        Builds test images from raw test data or fetches them and returns paths
+        Plots position and differences according to voltage and shows window
+        """
         base = "sendes/app"
         raw_v = f"/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_raw.png"
         delta_v = f"/static/tests/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_delta.png"
@@ -403,7 +409,7 @@ class TestService:
     @staticmethod
     def analyze(test_entry: Test) -> Test:
         """
-        Sets ufloats for ain0, ain1 and np.diff(ain2) over window
+        Calculates ufloats for vp1, vp2, and vdx over window, saves to db and returns entry
         """
         scans = [
             (s.ain0, s.ain1, s.ain2)
@@ -416,11 +422,11 @@ class TestService:
         for i in range(2):
             setattr(
                 test_entry,
-                f"ufloat_ain{i}",
+                f"ufloat_vp{i+1}",
                 str(ufloat(np.average(scans[f"ain{i}"]), np.std(scans[f"ain{i}"]))),
             )
 
-        test_entry.ufloat_ain2_diff = str(
+        test_entry.ufloat_vdx = str(
             ufloat(np.average(np.diff(scans["ain2"])), np.std(np.diff(scans["ain2"])))
         )
 
@@ -433,13 +439,19 @@ class TestService:
 class ResultService:
     @staticmethod
     def get_vars(t: Test, c: Constants) -> tuple[Quantity, Quantity, Quantity]:
-        dx = ResultService.v2l(ufloat_fromstr(t.ufloat_ain2_diff) * ur.volt)
-        p1 = ResultService.v2p(ufloat_fromstr(t.ufloat_ain0) * ur.volt, "p1", c)
-        p2 = ResultService.v2p(ufloat_fromstr(t.ufloat_ain1) * ur.volt, "p2", c)
+        dx = ResultService.v2l(ufloat_fromstr(t.ufloat_vdx) * ur.volt)
+        p1 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp1) * ur.volt, "p1", c)
+        p2 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp2) * ur.volt, "p2", c)
         return dx, p1, p2
 
     @staticmethod
     def analyze(test_id: int, constants_id: int = None) -> str:
+        """
+        Given a test id, returns ufloat cd string according to tested constants
+        Constants can be passed explicitly
+
+        Saves cd ufloat str to test entry
+        """
         test_entry = db.session.get(Test, test_id)
         constants = db.session.get(
             Constants, test_entry.constants_id if constants_id is None else constants_id
@@ -455,13 +467,16 @@ class ResultService:
         den = d2**2 * (rad_num / rad_den) ** (1 / 2)
         cd = num / den
 
-        test_entry.cd = str(cd.magnitude)
+        test_entry.ufloat_cd = str(cd.magnitude)
         db.session.add(test_entry)
         db.session.commit()
         return str(cd.magnitude)
 
     @staticmethod
     def v2p(v: Quantity, p: str, c: Constants) -> Quantity:
+        """
+        Given voltage and constants entry, returns pressure quantity_ufloat
+        """
         return (
             (
                 (v / (20 * 5.9 * ur.ohm) - 0.004 * ur.A)
@@ -525,7 +540,6 @@ class dbService:
         """
         Gets existing model instance with matching properties
         """
-
         conditions = []
         for attr in inspect(instance).attrs:
             # Reflectively build conditions based on the object's attributes (ChatGPT)
@@ -590,10 +604,10 @@ class dbService:
             scan_rate_actual=scan_rate,
             window_start=w_start,
             window_finish=w_finish,
-            ufloat_ain0="not analyzed",
-            ufloat_ain1="not analyzed",
-            ufloat_ain2_diff="not analyzed",
-            cd="not analyzed",
+            ufloat_vp1="not analyzed",
+            ufloat_vp2="not analyzed",
+            ufloat_vdx="not analyzed",
+            ufloat_cd="not analyzed",
         )
         #
         x = np.arange(0, stream_reads / sec_div, 1 / scan_rate)

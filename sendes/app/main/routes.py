@@ -101,7 +101,8 @@ def get_test(test_id):
         bound_form.window_start.data = test.window_start
         bound_form.window_finish.data = test.window_finish
         images = TestService.get_images(test)
-        return render_template("test.html", test=test, images=images, bound_form=bound_form)
+        cd = ResultService.analyze(test.id)
+        return render_template("test.html", test=test, images=images, bound_form=bound_form, cd=cd)
     return redirect(url_for("main.get_tests"))
 
 
