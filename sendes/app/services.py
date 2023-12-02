@@ -6,8 +6,7 @@ from sqlalchemy import select, and_, inspect
 import sys, os
 from datetime import datetime, timedelta
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
+from matplotlib import pyplot as plt, lines
 from uncertainties import ufloat, ufloat_fromstr
 from pint import Quantity
 from labjack import ljm
@@ -132,8 +131,7 @@ class TestService:
         if test_entry is None:
             return None
         elif test_entry.ufloat_vp1 == "not analyzed":
-            test_entry = TestService.analyze(test_entry)
-            test_entry = ResultService.analyze(test_entry.id)
+            TestService.analyze(test_entry)
         return test_entry
 
     @staticmethod
@@ -237,7 +235,6 @@ class TestService:
                         ufloat_vp1="not analyzed",
                         ufloat_vp2="not analyzed",
                         ufloat_vdx="not analyzed",
-                        ufloat_cd="not analyzed",
                         ljconfig_id=ljconfig.id,
                         constants_id=db.session.execute(
                             select(Constants.id).where(Constants.is_active == True)
@@ -329,7 +326,6 @@ class TestService:
         test_entry = db.session.get(Test, test_id)
         bound_form.populate_obj(test_entry)
         test_entry = TestService.analyze(test_entry)
-        test_entry = ResultService.analyze(test_entry.id)
 
     @staticmethod
     def get_images(t: Test) -> list[str]:
@@ -349,10 +345,11 @@ class TestService:
             scans = [(s.ain0, s.ain1, s.ain2) for s in t.scans]
             scans = np.array(scans, dtype=dtype)
 
-            fig, ax = plt.subplots()  # Create a figure and an axes object
+            # Raw plot
+            fig, ax = plt.subplots()
             ax.plot(tt, scans["ain2"], label="$V_X$")
             ax.plot(tt, scans["ain0"], label="$V_{P1}$")
-            ax.plot(tt, scans["ain1"], label="$V_{P2}$")
+            ax.plot(tt, scans["ain1"], label="$V_{P2}$", color="green")
             ax.vlines(
                 x=[
                     t.window_start / t.scan_rate_actual,
@@ -365,22 +362,30 @@ class TestService:
             ax.set_ylabel("Volts")
             ax.set_xlabel("Seconds")
             ax.legend(loc="center left")
+            ax.set_title("Raw Data")
 
-            def forward(x):
-                return x * t.scan_rate_actual
-
-            def inverse(x):
-                return x / t.scan_rate_actual
-
-            secax = ax.secondary_xaxis("top", functions=(forward, inverse))
+            forward = lambda x: x * t.scan_rate_actual
+            inverse = lambda x: x / t.scan_rate_actual
+            secxax = ax.secondary_xaxis("top", functions=(forward, inverse))
+            secxax.set_xlabel("Sample")
 
             # Save the figure
-            plt.savefig(f"{base}{raw_v}")
+            plt.savefig(f"{base}{raw_v}", bbox_inches="tight")
 
+            # Delta plot
+            x_scale = 100
             tt = tt[:-1]
             fig, ax = plt.subplots()
-            ax.plot(tt, np.diff(scans["ain2"]) * 50, label="$\Delta V_X$")
-            ax.plot(tt, (scans["ain0"] - scans["ain1"])[:-1], label="$\Delta P$")
+            ax.plot(tt, np.diff(scans["ain2"]) * x_scale, label="$\Delta V_X$")
+            ax.plot(tt, (scans["ain0"] - scans["ain1"])[:-1], color="orange")
+            ax.plot(
+                tt,
+                (scans["ain0"] - scans["ain1"])[:-1],
+                "-",
+                dashes=(4, 4),
+                color="green",
+            )
+
             ax.vlines(
                 x=[
                     t.window_start / t.scan_rate_actual,
@@ -390,19 +395,24 @@ class TestService:
                 ymax=0.55,
                 colors=["black", "black"],
             )
+
+            vp1 = lines.Line2D([], [], color="orange")
+            vp2 = lines.Line2D([], [], linestyle="-", dashes=(4, 4), color="green")
+            vdx = lines.Line2D([], [], color="blue")
+
             ax.set_ylabel("Volts")
             ax.set_xlabel("Seconds")
-            ax.legend(loc="center left")
+            ax.legend(
+                [vdx, (vp1, vp2)],
+                ["$\\frac{100\Delta V_X}{\Delta t}$", "$\Delta V_P$"],
+                loc="center left",
+            )
+            ax.set_title("Processed Raw Data")
+
             secxax = ax.secondary_xaxis("top", functions=(forward, inverse))
+            secxax.set_xlabel("Sample")
 
-            def scaleup(y):
-                return y / 50
-
-            def scaledown(y):
-                return y * 50
-
-            secyax = ax.secondary_yaxis("right", functions=(scaleup, scaledown))
-            plt.savefig(f"{base}{delta_v}")
+            plt.savefig(f"{base}{delta_v}", bbox_inches="tight")
 
         return [raw_v, delta_v]
 
@@ -419,16 +429,16 @@ class TestService:
         ]
         dtype = [(f"ain{i}", "f8") for i in range(3)]
         scans = np.array(scans, dtype=dtype)
-        for i in range(2):
-            setattr(
-                test_entry,
-                f"ufloat_vp{i+1}",
-                str(ufloat(np.average(scans[f"ain{i}"]), np.std(scans[f"ain{i}"]))),
-            )
 
-        test_entry.ufloat_vdx = str(
-            ufloat(np.average(np.diff(scans["ain2"])), np.std(np.diff(scans["ain2"])))
+        ufloat_vp1 = ufloat(np.average(scans["ain0"]), np.std(scans["ain0"]))
+        ufloat_vp2 = ufloat(np.average(scans["ain1"]), np.std(scans["ain1"]))
+        ufloat_vdx = ufloat(
+            np.average(np.diff(scans["ain2"])), np.std(np.diff(scans["ain2"]))
         )
+
+        test_entry.ufloat_vp1 = str(ufloat_vp1)
+        test_entry.ufloat_vp2 = str(ufloat_vp2)
+        test_entry.ufloat_vdx = str(ufloat_vdx)
 
         db.session.add(test_entry)
         db.session.commit()
@@ -439,18 +449,22 @@ class TestService:
 class ResultService:
     @staticmethod
     def get_vars(t: Test, c: Constants) -> tuple[Quantity, Quantity, Quantity]:
+        """
+        Given a Test and constants entry, get dx ufloat and pressure quantity_ufloats (constants contain xducer calibration)
+        """
         dx = ResultService.v2l(ufloat_fromstr(t.ufloat_vdx) * ur.volt)
         p1 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp1) * ur.volt, "p1", c)
         p2 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp2) * ur.volt, "p2", c)
         return dx, p1, p2
 
     @staticmethod
-    def analyze(test_id: int, constants_id: int = None) -> str:
+    def analyze(test_id: int, constants_id: int = None) -> dict:
         """
         Given a test id, returns ufloat cd string according to tested constants
         Constants can be passed explicitly
 
         Saves cd ufloat str to test entry
+        Returns dict containing component uncertainties with and their UMF with respect to Cd
         """
         test_entry = db.session.get(Test, test_id)
         constants = db.session.get(
@@ -461,21 +475,33 @@ class ResultService:
         dx, p1, p2 = ResultService.get_vars(test_entry, constants)
 
         dt = 1 / test_entry.scan_rate_actual * ur.s
-        num = 4 * (d / 2) ** 2 * dx / dt
-        rad_num = 2 * (p1 - p2)
-        rad_den = rho * (1 - (d2 / d1) ** 4)
-        den = d2**2 * (rad_num / rad_den) ** (1 / 2)
-        cd = num / den
-
-        test_entry.ufloat_cd = str(cd.magnitude)
-        db.session.add(test_entry)
-        db.session.commit()
-        return str(cd.magnitude)
+        try:
+            cd = (
+                4
+                * (d / 2) ** 2
+                * (dx / dt)
+                / (d2**2 * (2 * (p1 - p2) / (rho * (1 - (d2 / d1) ** 4))) ** (1 / 2))
+            )
+        except Exception as e:
+            return e
+            
+        # variable : [ ufloat_str, umf ]
+        cd_dict = {
+            "cd": [str(cd.magnitude), 1],
+            "d": [str(d.to('in').magnitude), cd.derivatives[next(iter(d.to('in').derivatives))]],
+            "d1": [str(d1.to('in').magnitude), cd.derivatives[next(iter(d1.to('in').derivatives))]],
+            "d2": [str(d2.to('in').magnitude), cd.derivatives[next(iter(d2.to('in').derivatives))]],
+            "rho": [str(rho.magnitude), cd.derivatives[next(iter(rho.derivatives))]],
+            "dx": [str(dx.to('in').magnitude), cd.derivatives[next(iter(dx.to('in').derivatives))]],
+            "p1": [str(p1.to('psi').magnitude), cd.derivatives[next(iter(p1.to('psi').derivatives))]],
+            "p2": [str(p2.to('psi').magnitude), cd.derivatives[next(iter(p2.to('psi').derivatives))]],
+        }
+        return cd_dict
 
     @staticmethod
     def v2p(v: Quantity, p: str, c: Constants) -> Quantity:
         """
-        Given voltage and constants entry, returns pressure quantity_ufloat
+        Given voltage, transducer designator (1 or 2), and constants entry, returns pressure quantity_ufloat
         """
         return (
             (
@@ -489,48 +515,36 @@ class ResultService:
 
     @staticmethod
     def v2l(v: Quantity) -> Quantity:
+        """Given voltage, return distance quantity_ufloat"""
         return (v * 7.853 * ur.inch / ur.V).to("m")
 
     @staticmethod
-    def get_images(test_id):
-        # !!!
-        # check if images exist, render if not
-        # image 1: cd with dp and dxdt, include shaded region for +/-stdev
-        # https://stackoverflow.com/a/43069856/14410691
-        # image 2: x position, p1, p2 with all scales
-        # image 3: bar chart of relative uncertainties of each variable
-        # maybe include calculation window
-        # return paths in dict
+    def get_images(cd_dict: dict, test_id: int, const_id: int = None) -> str:
+        t = db.session.get(Test, test_id)
         base = "sendes/app"
-        raw_v = f"/static/results/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_raw.png"
-        delta_v = f"/static/results/{t.id}_{t.window_start}_{t.window_finish}_{t.constants_id}_delta.png"
+        percentage_img = f"/static/results/{test_id}_{t.window_start}_{t.window_finish}_{t.constants_id if const_id is None else const_id}_uPer.png"
 
-        if not os.path.isfile(raw_v):
-            tt = np.arange(
-                0, len(t.scans) * 1 / t.scan_rate_actual, 1 / t.scan_rate_actual
-            )
-            dtype = [(f"ain{i}", "f8") for i in range(3)]
-            scans = [(s.ain0, s.ain1, s.ain2) for s in t.scans]
-            scans = np.array(scans, dtype=dtype)
-            plt.clf()
-            plt.plot(tt, scans["ain0"], label="$V_{P1}$")
-            plt.plot(tt, scans["ain1"], label="$V_{P2}$")
-            plt.plot(tt, scans["ain2"], label="$V_X$")
-            plt.ylabel("Volts")
-            plt.xlabel("Time")
-            plt.legend()
-            plt.savefig(f"{base}{raw_v}")
+        if not os.path.isfile(f"{base}{percentage_img}"):
+            if any(ufloat_fromstr(val[0]).n == 0 for val in cd_dict.values()):
+                percentage_img = "https://www.publicdomainpictures.net/pictures/380000/velka/error-message.jpg"
+            else:
+                densq = sum((ufloat_fromstr(lis[0]).s / ufloat_fromstr(lis[0]).n * lis[1])**2 for key, lis in cd_dict.items() if key != "cd" )
+                plt.clf()
+                plt.bar(
+                    x=[var for var in cd_dict.keys() if var != "cd"],
+                    height=[
+                        ((lis[1] * ufloat_fromstr(lis[0]).s / ufloat_fromstr(lis[0]).n))**2 / densq
+                        for key, lis in cd_dict.items()
+                        if key != "cd"
+                    ],
+                    color="blue"
+                )
 
-            tt = tt[:-1]
-            plt.clf()
-            plt.plot(tt, (scans["ain0"] - scans["ain1"])[:-1], label="$\Delta P$")
-            plt.plot(tt, np.diff(scans["ain2"]), label="$\Delta V_X$")
-            plt.ylabel("Volts")
-            plt.xlabel("Time")
-            plt.legend()
-            plt.savefig(f"{base}{delta_v}")
+                plt.xlabel("Variable")
+                plt.ylabel("Percentage Uncertainty wrt CD")
+                plt.savefig(f"{base}{percentage_img}")
 
-        return [raw_v, delta_v]
+        return percentage_img
 
 
 class dbService:
@@ -607,7 +621,6 @@ class dbService:
             ufloat_vp1="not analyzed",
             ufloat_vp2="not analyzed",
             ufloat_vdx="not analyzed",
-            ufloat_cd="not analyzed",
         )
         #
         x = np.arange(0, stream_reads / sec_div, 1 / scan_rate)
@@ -618,10 +631,10 @@ class dbService:
         # ain1 = P2
         ain1[(x < 0.5)] = 0.9451
         ain1[(x >= 0.5) & (x < 1)] = (
-            -(0.9451 - 0.471) / 0.5 * x[(x >= 0.5) & (x < 1)] + 0.9451 + 0.9451 - 0.471
+            -(0.9451 - 0.471) / 0.5 * x[(x >= 0.5) & (x < 1)] + 0.9451 + 0.9451 - 0.47
         )
-        ain1[(x >= 1) & (x < 2)] = 0.471
-        ain1[(x >= 2)] = (0.9451 - 0.471) / 0.5 * x[(x >= 2)] - 1.4254
+        ain1[(x >= 1) & (x < 2)] = 0.47
+        ain1[(x >= 2)] = (0.9451 - 0.471) / 0.5 * x[(x >= 2)] - 1.4253
         # ain2 = x
         ain2[(x < 0.5)] = 0.2
         ain2[(x >= 0.5) & (x < 2)] = x[(x >= 0.5) & (x < 2)] * 0.368 + 0.016
@@ -650,9 +663,9 @@ class dbService:
 
         constants.tests = [test]
         ljconfig.tests = [test]
-        db.session.add(test)
         db.session.add(constants)
         db.session.add(ljconfig)
+        db.session.add(test)
         db.session.commit()
 
     @staticmethod

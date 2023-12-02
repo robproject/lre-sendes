@@ -1,10 +1,18 @@
 from app.main import bp
 from app.extensions import db
-from app.forms import ConstantsForm, LjconfigForm, TestBoundForm, TestForm, ResultForm
+from app.forms import ConstantsForm, LjconfigForm, TestBoundForm
 from app.services import ConstantsService, LjconfigService, TestService, ResultService
 from app.models import Constants, Ljconfig, Test
 
-from flask import render_template, redirect, url_for, send_from_directory, request, current_app
+from flask import (
+    render_template,
+    redirect,
+    url_for,
+    send_from_directory,
+    request,
+    current_app,
+)
+import json
 from sqlalchemy import select
 
 
@@ -102,8 +110,9 @@ def get_test(test_id):
         bound_form.window_start.data = test.window_start
         bound_form.window_finish.data = test.window_finish
         images = TestService.get_images(test)
-        cd = ResultService.analyze(test.id)
-        return render_template("test.html", test=test, images=images, bound_form=bound_form, cd=cd)
+        return render_template(
+            "test.html", test=test, images=images, bound_form=bound_form
+        )
     return redirect(url_for("main.get_tests"))
 
 
@@ -119,22 +128,20 @@ def set_test_bound(test_id):
         return redirect(url_for("main.index"))
 
 
-@bp.route("/results/<int:test_id>", methods=["GET"])
+@bp.route("/result/<int:test_id>", methods=["GET"])
 def get_result(test_id):
-    cd = ResultService.analyze(test_id)
-    print(cd)
-    # display result for test with active constant applied. Provide option to
-    # use different constants
-    return render_template("result.html", test=test, cd=cd, images=images)
+    cd_dict = ResultService.analyze(test_id)
+    if isinstance(cd_dict, dict):
+        image = ResultService.get_images(cd_dict, test_id)
+        return render_template("result.html", cd_dict=cd_dict, image=image)
+    else:
+        return redirect(url_for("main.get_test", test_id=test_id))
 
-
-@bp.route("/results", methods=["GET"])
-def results():
-    tests = db.session.execute(select(Test)).scalars()
-    # show list of aggregated results with active constants applied
-    # provide option to show new constants aplied with checkboxes and new constants dropdown or something
-    return render_template("results.html", tests=tests)
 
 @bp.route("/favicon.ico")
 def favicon():
-    return send_from_directory(directory="static/favicon/", path="favicon.ico", mimetype="image/vnd.microsoft.icon")
+    return send_from_directory(
+        directory="static/favicon/",
+        path="favicon.ico",
+        mimetype="image/vnd.microsoft.icon",
+    )

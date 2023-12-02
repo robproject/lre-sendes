@@ -1,27 +1,13 @@
 {% extends "base.html" %}
-<body>
-    <div>
-        {% block title %}Tests{% endblock %}
-        {% block content %}
-            <form action="/test/set/{{test.id}}" method="post">
-                {{ bound_form.hidden_tag() }}
-                <table>
-                    <tr>
-                        <th>{{ bound_form.window_start.label }}</th>
-                        <th>{{ bound_form.window_finish.label }}</th>
-                    </tr>
-                    <tr>
-                        <th>{{ bound_form.window_start() }}</th>
-                        <th>{{ bound_form.window_finish() }}</th>
-                    </tr>
-                </table>
-                {{ bound_form.submit() }}
-            </form>
-            <div>AIN0: {{ test.ufloat_vp1 }}</div>
-            <div>AIN1: {{ test.ufloat_vp2 }}</div>
-            <div>AIN2: {{ test.ufloat_vdx }}</div>
-            <img src="{{ images[0] }}">
-            <img src="{{ images[1] }}">
-        {% endblock %}
+{% block title %}Result{% endblock %}
+{% block content %}
+    <div class="row">
+        <h3>Cd: {{ cd_dict["cd"][0] }}</h3>
     </div>
-</body>
+    <img src="{{ image }}">
+    {% for key, val in cd_dict.items() if key != 'cd' %}
+    <div class="row">
+        {{ key }}: {{ val[0] }}
+    </div>
+    {% endfor %}
+{% endblock %}

@@ -19,12 +19,24 @@
                 {{ bound_form.submit(class="btn btn-primary") }}
                 </div>
             </form>
-            <div>AIN0: {{ test.ufloat_vp1 }}</div>
-            <div>AIN1: {{ test.ufloat_vp2 }}</div>
-            <div>AIN2: {{ test.ufloat_vdx }}</div>
-            <h3>Cd: {{ cd }}</h3>
-            <img src="{{ images[0] }}">
-            <img src="{{ images[1] }}">
+            <div class="row">
+                <div class="col"><img src="{{ images[0] }}"></div>
+            </div>
+            <div class="row">
+                <div class="col">V P1: {{ test.ufloat_vp1 }} Volts</div>
+            </div>
+            <div class="row">
+                <div class="col">V P2: {{ test.ufloat_vp2 }} Volts</div>
+            </div>
+            <div class="row">
+                <div class="col"><img src="{{ images[1] }}"></div>
+            </div>
+            <div class="row">
+                <div class="col">dx/dt: {{ test.ufloat_vdx }} Volts</div>
+            </div>
+            <div class="mt-2">
+                <a class="btn btn-primary" href="/result/{{test.id}}">View Result</a>
+            </div>
         {% endblock %}
     </div>
 </body>

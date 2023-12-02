@@ -73,7 +73,6 @@ class Test(db.Model):
     ufloat_vp1: Mapped[str] = mapped_column(db.String)
     ufloat_vp2: Mapped[str] = mapped_column(db.String)
     ufloat_vdx: Mapped[str] = mapped_column(db.String)
-    ufloat_cd: Mapped[str] = mapped_column(db.String)
     ljconfig_id: Mapped[int] = mapped_column(db.ForeignKey("ljconfig.id"))
     constants_id: Mapped[int] = mapped_column(db.ForeignKey("constants.id"))
     stream_reads: Mapped[list["StreamRead"]] = relationship()
