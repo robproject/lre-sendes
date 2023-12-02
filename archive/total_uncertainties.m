@@ -23,9 +23,9 @@ transducer = convpres(transducer, 'psi', 'Pa');
 vars_const = {
     'rho',   1000,                              0; % kg/m3
     'P1',    convpres(50, 'psi', 'Pa'),    transducer;
-    'P2',    convpres(15, 'psi', 'Pa'),      transducer; 
-    'D2',    convlength(.25, 'in', 'm'),      calipers;
-    'D1',    convlength(  1, 'in', 'm'),      calipers;
+    'P2',    convpres(0, 'psi', 'Pa'),      transducer; 
+    'D2',    convlength(.238, 'in', 'm'),      calipers;
+    'D1',    convlength(  .618, 'in', 'm'),      calipers;
     };
 syms(vars_const{:,1})
 
