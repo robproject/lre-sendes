@@ -6,9 +6,11 @@ clearvars; close all; clc;
 
 piston_rate = 2.89; % period s, rate in/s
 %sample_periods = flip([1/5 1/10 1/20 1/40 1/80 1/160 1/267]); % sample period array
-sample_periods = 1./2.^flip(1:.5:10);
-%percent_cont_array = zeros(10, length(sample_periods));
-percent_cont_array = zeros(1, length(sample_periods));
+sample_periods = 1./2.^(0:.25:10); % sample period array, generated
+percent_cont_array_all = zeros(10, length(sample_periods));
+percent_cont_array_x = zeros(1, length(sample_periods));
+percent_cont_array_t = percent_cont_array_x;
+cd_u_array = percent_cont_array_x;
 for iter=1:length(sample_periods)
 % constants
 rho = 1000; % kg/m3
@@ -38,6 +40,7 @@ ljtick_scalar = ljtick_gain * ljtick_shunt; % resistance; V/I = 118
 
 
 sample_period = sample_periods(iter); piston_rate = 2.89; % simulation of longer period
+fprintf('Sample Rate: %.1f\n', 1/sample_period)
 % nominal pot voltage given piston rate and desired sample period
 % volts traveled = s * in/s * v/in
 pot_dv = @(period, rate) period * rate * 1/pot_slope;
@@ -53,9 +56,9 @@ p2_read = xducer_reading(p2_pressure, p2_slope, p2_offset);
 
 % clock tick uncertainty
 % u_clock_tick = 1.6522e-8; % for sample period of 1/267 seconds
-% UMF for clock tick given sample rate
+% UMF for clock tick given sample rate, 
 u_clock_scalar = sqrt(sample_period/(1/267));
-u_clock_tick = u_clock_scalar *1.6552e-8; % for sample period of .25 seconds
+u_clock_tick = u_clock_scalar *1.6552e-8;
 
 % parameter object initialization: nominal and absolute uncertain values
 pd  = UObj( 3.505, .002284631).mul(in2m); % inches -> meters
@@ -63,9 +66,9 @@ pd  = UObj( 3.505, .002284631).mul(in2m); % inches -> meters
 vx_mxl = 6.08881e-5; % potentiometer uncertainty reading as calced in excel
 vx_test = .00011; % potentiometer uncertainty reading from test
 vx2 = UObj( .4+potentiometer_distance_per_sample_as_voltage, vx_test); 
-vx1 = UObj( .4, x_test); % voltage, uses same uncertainty as x1
-t2  = UObj( sample_period, u_clock_tick); % sample period
-t1  = UObj( .0000000001, u_clock_tick *1e-20); % 0s
+vx1 = UObj( .4, vx_test); % voltage, uses same uncertainty as x1
+t2  = UObj( .2+sample_period, u_clock_tick); % sample period
+t1  = UObj( .2, u_clock_tick *1e-20); % 0s
 d2  = UObj( .238, 7.84915e-4).mul(in2m); % inches -> meters
 d1  = UObj( .618, .001129).mul(in2m); % inches -> meters
 p1_mxl = .007120869; % xducer 1 u reading as calc from excel
@@ -126,14 +129,8 @@ vals = [X1.V X2.V T1.V T2.V P1.V P2.V D1.V D2.V RHO R.V];
 % save abs uncertain values
 u_vals = [X1.U X2.U T1.U T2.U P1.U P2.U D1.U D2.U 0 R.U];
 
-% not a helpful graph, u_p2 / p2 = small number / small number, dwarfing
-% other percentages
-figure('Name', 'Relative Uncertainty per Parameter')
+
 sym_strs = ["x1" "x2" "t1" "t2" "p1" "p2" "d1" "d2" "rho" "r"];
-%%plotting each variable's relative uncertainty
-bar(sym_strs,u_vals./vals*100)
-xlabel('Variable')
-ylabel('Relative Uncertainty, %')
 
 
 % Symbolic Substitution --------------------------------------------------
@@ -170,40 +167,79 @@ end
 
 % find nominal cd value
 cd_v = eval(subs(cd, sym_chars, vals));
-% find uncertainty from rssq of all variable relative uncertainties
+% find CD uncertainty from rssq of all variable relative uncertainties
 cd_ur = rssq(u_propagated);
 
 fprintf('Substituted CD: %.3f ±%.2f%%\n', cd_v, cd_ur*100)
+
 %%total relative uncertainties wrt CD
-total_else = sum(abs(u_propagated));
-%%total relative uncertainty wrt CD of x
+total_urel = sum(abs(u_propagated));
+%%total relative uncertainty wrt CD of var
 total_x = sum(abs(u_propagated(1,1:2)));
-fprintf('Potentiometer Reading Uncertainty Contribution: %.1f%%\n', total_x/total_else*100)
-percent_cont_array(iter) = total_x/total_else*100;
-%percent_cont_array(:,iter) = abs(u_propagated);
+total_t = sum(abs(u_propagated(1,3:4)));
+fprintf('Potentiometer Reading Uncertainty Contribution: %.1f%%\n', total_x/total_urel*100)
+percent_cont_array_x(iter) = total_x/total_urel*100;
+percent_cont_array_t(iter) = total_t/total_urel*100;
+percent_cont_array_all(:,iter) = abs(u_propagated)/total_urel;
+cd_u_array(iter) = cd_ur*100;
+
+% iter = 18 = 19 samples / s , 1.75s test * 19sa/s = 33samples
+if iter==18
+    u_prop_14 = u_propagated;
+    u_vals_14 = u_vals;
+    vals_14 = vals;
+end
 
 
 
 end
-fsym = figure('Name','Relative Uncertainty wrt Cd');
-% plotting relative uncertainty with respect to CD, per variable
-bar(sym_strs, abs(u_propagated)*100)
-xlabel('Variable')
-ylabel('Relative Uncertainty wrt Cd, %')
-fsym.Position = fsym.Position + [600, 0, 0, 0];
 
-f_sample_vs_xcont= figure('Name', 'Percentage Contribution of X to CD Uncertainty');
-semilogx(1./sample_periods, percent_cont_array)
+figure('Name', 'Sample Rate Range Variation and Relative Uncertainties at Low Range')
+
+subplot(3,2,6)
+% % plotting each variable's relative uncertainty
+bar(sym_strs,u_vals_14./vals_14*100)
+title('Relative Uncertainty per Parameter at 19 sa/s');
+xlabel('Variable')
+ylabel('Relative Uncertainty, %')
+
+subplot(3,2,5)
+bar(sym_strs, abs(u_prop_14)/sum(abs(u_prop_14))*100)
+title('Normalized Relative Uncertainty wrt CD at 19 sa/s');
+xlabel('Variable')
+ylabel('Relative Uncertainty Contribution to CD, %')
+
+subplot(3,2,4)
+semilogx(1./sample_periods, percent_cont_array_x)
+title('Uncertainty Percentage Contribution of X to CD');
 grid on
 xlabel('Sample Rate')
 ylabel('X Uncertainty Contribution, %')
 
-% f_sample_vs_urel = figure('Name', 'Relative Uncertainty wrt CD');
-% xlabel('Variable')
-% ylabel('RelativeUncertainty wrtCd, %')
-% 
-% plot(1./sample_periods, percent_cont_array)
-% legend(sym_strs)
+
+subplot(3,2,3)
+semilogx(1./sample_periods, percent_cont_array_t);
+title('Uncertainty Percentage Contribution of t to CD');
+grid on
+xlabel('Sample Rate')
+ylabel('t Uncertainty Contribution, %')
+
+subplot(3,2,2)
+semilogx(1./sample_periods, percent_cont_array_all*100)
+legend(sym_strs)
+title('Normalized Relative Uncertainty wrt CD');
+xlabel('Sample Rate')
+ylabel('Relative Uncertainty wrtCd, %')
+grid on
+
+subplot(3,2,1)
+semilogx(1./sample_periods, cd_u_array);
+title('CD Relative Uncertainty');
+xlabel('Sample Rate')
+ylabel('Relative Uncertainy of CD, %')
+grid on
+
+
 
 %% Monte Carlo ------------------------------------------------------------
 cd_vals = zeros(1,10);
