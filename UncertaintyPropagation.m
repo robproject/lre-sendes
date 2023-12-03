@@ -11,7 +11,9 @@ percent_cont_array_all = zeros(10, length(sample_periods));
 percent_cont_array_x = zeros(1, length(sample_periods));
 percent_cont_array_t = percent_cont_array_x;
 cd_u_array = percent_cont_array_x;
-for iter=1:length(sample_periods)
+umf_vals_array = percent_cont_array_all;
+urel_array = umf_vals_array;
+for iter=1:length(sample_periods) 
 % constants
 rho = 1000; % kg/m3
 in2m = 0.0254;  % meters per inch
@@ -67,8 +69,8 @@ vx_mxl = 6.08881e-5; % potentiometer uncertainty reading as calced in excel
 vx_test = .00011; % potentiometer uncertainty reading from test
 vx2 = UObj( .4+potentiometer_distance_per_sample_as_voltage, vx_test); 
 vx1 = UObj( .4, vx_test); % voltage, uses same uncertainty as x1
-t2  = UObj( .2+sample_period, u_clock_tick); % sample period
-t1  = UObj( .2, u_clock_tick *1e-20); % 0s
+t2  = UObj( .2+2*sample_period, u_clock_tick); % sample period
+t1  = UObj( .2+sample_period, u_clock_tick *1e-20); % 0s
 d2  = UObj( .238, 7.84915e-4).mul(in2m); % inches -> meters
 d1  = UObj( .618, .001129).mul(in2m); % inches -> meters
 p1_mxl = .007120869; % xducer 1 u reading as calc from excel
@@ -138,7 +140,6 @@ syms(sym_strs);
 sym_chars = [x1 x2 t1 t2 p1 p2 d1 d2 rho r];
 
 umf_syms = sym.empty;
-u_propagated = zeros(1,length(umf_syms));
 
 cd = ...
     4 * r^2 * ...               pd term   \ numerator
@@ -154,17 +155,17 @@ cd = ...
     );                                                   %/
 
 for i = 1:length(vals)
-
     % find partial derivative of cd with respect to variable and multiply
     % by variable and divide by cd to find UMF equation, and store in array
     umf_syms(i) = simplify(diff(cd, sym_chars(i)) * sym_chars(i)/cd);
-
-    % substitute variables in UMF equation with their nominal values to get
-    % numerical UMF, then muliply by relative uncertainty of variable, then
-    % store in array
-    u_propagated(i) = eval(subs(umf_syms(i), sym_chars, vals)) * u_vals(i)/vals(i);
 end
 
+% substitute variables in UMF equation with their nominal values to get
+% numerical UMF,
+umf_vals =  eval(subs(umf_syms, sym_chars, vals));
+
+urels = u_vals./vals;
+u_propagated = umf_vals .* urels;
 % find nominal cd value
 cd_v = eval(subs(cd, sym_chars, vals));
 % find CD uncertainty from rssq of all variable relative uncertainties
@@ -173,15 +174,17 @@ cd_ur = rssq(u_propagated);
 fprintf('Substituted CD: %.3f ±%.2f%%\n', cd_v, cd_ur*100)
 
 %%total relative uncertainties wrt CD
-total_urel = sum(abs(u_propagated));
+sum_urel_wrt_cd = sum(abs(u_propagated));
 %%total relative uncertainty wrt CD of var
 total_x = sum(abs(u_propagated(1,1:2)));
 total_t = sum(abs(u_propagated(1,3:4)));
-fprintf('Potentiometer Reading Uncertainty Contribution: %.1f%%\n', total_x/total_urel*100)
-percent_cont_array_x(iter) = total_x/total_urel*100;
-percent_cont_array_t(iter) = total_t/total_urel*100;
-percent_cont_array_all(:,iter) = abs(u_propagated)/total_urel;
+fprintf('Potentiometer Reading Uncertainty Contribution: %.1f%%\n', total_x/sum_urel_wrt_cd*100)
+percent_cont_array_x(iter) = total_x/sum_urel_wrt_cd*100;
+percent_cont_array_t(iter) = total_t/sum_urel_wrt_cd*100;
+percent_cont_array_all(:,iter) = abs(u_propagated)/sum_urel_wrt_cd;
 cd_u_array(iter) = cd_ur*100;
+umf_vals_array(:,iter) = umf_vals;
+urel_array(:,iter) = u_vals./vals;
 
 % iter = 18 = 19 samples / s , 1.75s test * 19sa/s = 33samples
 if iter==18
@@ -195,21 +198,23 @@ end
 end
 
 figure('Name', 'Sample Rate Range Variation and Relative Uncertainties at Low Range')
+sp_row = 3;
+sp_col = 3;
 
-subplot(3,2,6)
+subplot(sp_row,sp_col,6)
 % % plotting each variable's relative uncertainty
 bar(sym_strs,u_vals_14./vals_14*100)
 title('Relative Uncertainty per Parameter at 19 sa/s');
 xlabel('Variable')
 ylabel('Relative Uncertainty, %')
 
-subplot(3,2,5)
+subplot(sp_row,sp_col,5)
 bar(sym_strs, abs(u_prop_14)/sum(abs(u_prop_14))*100)
 title('Normalized Relative Uncertainty wrt CD at 19 sa/s');
 xlabel('Variable')
 ylabel('Relative Uncertainty Contribution to CD, %')
 
-subplot(3,2,4)
+subplot(sp_row,sp_col,4)
 semilogx(1./sample_periods, percent_cont_array_x)
 title('Uncertainty Percentage Contribution of X to CD');
 grid on
@@ -217,14 +222,14 @@ xlabel('Sample Rate')
 ylabel('X Uncertainty Contribution, %')
 
 
-subplot(3,2,3)
+subplot(sp_row,sp_col,3)
 semilogx(1./sample_periods, percent_cont_array_t);
 title('Uncertainty Percentage Contribution of t to CD');
 grid on
 xlabel('Sample Rate')
 ylabel('t Uncertainty Contribution, %')
 
-subplot(3,2,2)
+subplot(sp_row,sp_col,2)
 semilogx(1./sample_periods, percent_cont_array_all*100)
 legend(sym_strs)
 title('Normalized Relative Uncertainty wrt CD');
@@ -232,14 +237,27 @@ xlabel('Sample Rate')
 ylabel('Relative Uncertainty wrtCd, %')
 grid on
 
-subplot(3,2,1)
+subplot(sp_row,sp_col,1)
 semilogx(1./sample_periods, cd_u_array);
 title('CD Relative Uncertainty');
 xlabel('Sample Rate')
 ylabel('Relative Uncertainy of CD, %')
 grid on
 
+subplot(sp_row,sp_col,7)
+loglog(1./sample_periods, abs(umf_vals_array));
+legend(sym_strs)
+title('UMF Per Variable')
+xlabel('Sample Rate')
+ylabel('UMF')
+grid on
 
+subplot(sp_row,sp_col,8)
+loglog(1./sample_periods, urel_array)
+legend(sym_strs)
+title('Relative Uncertainty Per Variable')
+xlabel('Sample Rate')
+ylabel('Relative Uncertainty, %')
 
 %% Monte Carlo ------------------------------------------------------------
 cd_vals = zeros(1,10);
