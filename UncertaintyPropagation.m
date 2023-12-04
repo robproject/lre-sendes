@@ -13,6 +13,7 @@ percent_cont_array_all = zeros(10, length(sample_periods));
 percent_cont_array_x = zeros(1, length(sample_periods));
 percent_cont_array_t = percent_cont_array_x;
 cd_u_array = percent_cont_array_x;
+rel_cont_array_all = percent_cont_array_all;
 umf_vals_array = percent_cont_array_all;
 urel_array = umf_vals_array;
 % -------------------------------------/
@@ -186,6 +187,7 @@ fprintf('Potentiometer Reading Uncertainty Contribution: %.1f%%\n\n', total_x/su
 percent_cont_array_x(iter) = total_x/sum_urel_wrt_cd*100;
 percent_cont_array_t(iter) = total_t/sum_urel_wrt_cd*100;
 percent_cont_array_all(:,iter) = abs(u_propagated)/sum_urel_wrt_cd;
+rel_cont_array_all(:,iter) = percent_cont_array_all(:,iter) .* cd_ur;
 cd_u_array(iter) = cd_ur*100;
 umf_vals_array(:,iter) = umf_vals;
 urel_array(:,iter) = u_vals./vals;
@@ -234,8 +236,7 @@ ylabel('t Uncertainty Contribution, %')
 subplot(sp_row,sp_col,2)
 percent_cont_array_all(2,:) = sum(percent_cont_array_all(1:2,:));
 semilogx(1./sample_periods, percent_cont_array_all(2:end,:)*100)
-sym_strs(2) = 'dx';
-legend(sym_strs(1,2:end))
+legend(['dx' sym_strs(1,3:end)])
 title('Normalized Relative Uncertainty wrt CD');
 xlabel('Sample Rate')
 ylabel('Relative Uncertainty wrtCd, %')
@@ -262,6 +263,16 @@ legend(sym_strs)
 title('Relative Uncertainty Per Variable')
 xlabel('Sample Rate')
 ylabel('Relative Uncertainty, %')
+
+subplot(sp_row,sp_col,9)
+area(1./sample_periods, rel_cont_array_all'*100)
+set(gca, 'XScale', 'log')
+set(gca, 'YScale', 'log')
+legend(sym_strs)
+title('Relative Uncertainty wrt CD');
+xlabel('Sample Rate')
+ylabel('Relative Uncertainty wrt Cd, %')
+grid on
 
 % %% Monte Carlo ------------------------------------------------------------
 % cd_vals = zeros(1,10);
