@@ -5,6 +5,8 @@ clearvars; close all; clc;
 % UObj.P
 
 piston_rate = 2.89; % period s, rate in/s
+
+% Array Setup for plotting ------------\
 %sample_periods = flip([1/5 1/10 1/20 1/40 1/80 1/160 1/267]); % sample period array
 sample_periods = 1./2.^(0:.25:10); % sample period array, generated
 percent_cont_array_all = zeros(10, length(sample_periods));
@@ -13,7 +15,10 @@ percent_cont_array_t = percent_cont_array_x;
 cd_u_array = percent_cont_array_x;
 umf_vals_array = percent_cont_array_all;
 urel_array = umf_vals_array;
+% -------------------------------------/
 for iter=1:length(sample_periods) 
+fprintf("Iter: %g \n", iter)
+
 % constants
 rho = 1000; % kg/m3
 in2m = 0.0254;  % meters per inch
@@ -21,7 +26,6 @@ psi2pa = 6894.76;  % pascals per psi
 
 % calibration constants
 pot_slope = 7.853; % inches per volt potentiometer calibration
-
 
 p1_slope = .9977953; % xducer cal sheet - C01AB psi slope
 p1_offset = -.008752722; % xducer cal sheet - C01AB psi offset
@@ -41,7 +45,7 @@ ljtick_scalar = ljtick_gain * ljtick_shunt; % resistance; V/I = 118
 %sample_period = 1/267; 
 
 
-sample_period = sample_periods(iter); piston_rate = 2.89; % simulation of longer period
+sample_period = sample_periods(iter); piston_rate = 2.89; % simulate multiple periods
 fprintf('Sample Rate: %.1f\n', 1/sample_period)
 % nominal pot voltage given piston rate and desired sample period
 % volts traveled = s * in/s * v/in
@@ -66,7 +70,7 @@ u_clock_tick = u_clock_scalar *1.6552e-8;
 pd  = UObj( 3.505, .002284631).mul(in2m); % inches -> meters
 % voltage, as in middle of range (+.4v) for less relative uncertainty
 vx_mxl = 6.08881e-5; % potentiometer uncertainty reading as calced in excel
-vx_test = .00011; % potentiometer uncertainty reading from test
+vx_test = .00011/sqrt(2); % potentiometer uncertainty reading from test
 vx2 = UObj( .4+potentiometer_distance_per_sample_as_voltage, vx_test); 
 vx1 = UObj( .4, vx_test); % voltage, uses same uncertainty as x1
 t2  = UObj( .2+2*sample_period, u_clock_tick); % sample period
@@ -178,7 +182,7 @@ sum_urel_wrt_cd = sum(abs(u_propagated));
 %%total relative uncertainty wrt CD of var
 total_x = sum(abs(u_propagated(1,1:2)));
 total_t = sum(abs(u_propagated(1,3:4)));
-fprintf('Potentiometer Reading Uncertainty Contribution: %.1f%%\n', total_x/sum_urel_wrt_cd*100)
+fprintf('Potentiometer Reading Uncertainty Contribution: %.1f%%\n\n', total_x/sum_urel_wrt_cd*100)
 percent_cont_array_x(iter) = total_x/sum_urel_wrt_cd*100;
 percent_cont_array_t(iter) = total_t/sum_urel_wrt_cd*100;
 percent_cont_array_all(:,iter) = abs(u_propagated)/sum_urel_wrt_cd;
@@ -192,8 +196,6 @@ if iter==18
     u_vals_14 = u_vals;
     vals_14 = vals;
 end
-
-
 
 end
 
@@ -230,8 +232,10 @@ xlabel('Sample Rate')
 ylabel('t Uncertainty Contribution, %')
 
 subplot(sp_row,sp_col,2)
-semilogx(1./sample_periods, percent_cont_array_all*100)
-legend(sym_strs)
+percent_cont_array_all(2,:) = sum(percent_cont_array_all(1:2,:));
+semilogx(1./sample_periods, percent_cont_array_all(2:end,:)*100)
+sym_strs(2) = 'dx';
+legend(sym_strs(1,2:end))
 title('Normalized Relative Uncertainty wrt CD');
 xlabel('Sample Rate')
 ylabel('Relative Uncertainty wrtCd, %')
@@ -259,15 +263,15 @@ title('Relative Uncertainty Per Variable')
 xlabel('Sample Rate')
 ylabel('Relative Uncertainty, %')
 
-%% Monte Carlo ------------------------------------------------------------
-cd_vals = zeros(1,10);
-iters = 100;
-rand_vals = vals + u_vals.*randn(iters,length(vals));
-for i=1:iters
-    cd_vals(i) = eval(subs(cd, sym_chars, rand_vals(i,:)));
-end
-
-stdcdmc = std(cd_vals);
-mcdmc = mean(cd_vals);
-fprintf('Monte Carlo CD: %.3f ±%.2f%%\n\n',...
-   mcdmc, stdcdmc/mcdmc*100);
+% %% Monte Carlo ------------------------------------------------------------
+% cd_vals = zeros(1,10);
+% iters = 100;
+% rand_vals = vals + u_vals.*randn(iters,length(vals));
+% for i=1:iters
+%     cd_vals(i) = eval(subs(cd, sym_chars, rand_vals(i,:)));
+% end
+% 
+% stdcdmc = std(cd_vals);
+% mcdmc = mean(cd_vals);
+% fprintf('Monte Carlo CD: %.3f ±%.2f%%\n\n',...
+%    mcdmc, stdcdmc/mcdmc*100);
