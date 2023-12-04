@@ -453,8 +453,8 @@ class ResultService:
         Given a Test and constants entry, get dx ufloat and pressure quantity_ufloats (constants contain xducer calibration)
         """
         dx = ResultService.v2l(ufloat_fromstr(t.ufloat_vdx) * ur.volt)
-        p1 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp1) * ur.volt, "p1", c)
-        p2 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp2) * ur.volt, "p2", c)
+        p1 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp1) * ur.volt, "p1", c) 
+        p2 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp2) * ur.volt, "p2", c) 
         return dx, p1, p2
 
     @staticmethod
@@ -473,14 +473,17 @@ class ResultService:
 
         d, d1, d2, rho = ConstantsService.get_vars(constants)
         dx, p1, p2 = ResultService.get_vars(test_entry, constants)
-
+        p1_ucal = ufloat(1, (.000226**2 + .000635**2)**(1/2))
+        p2_ucal = ufloat(1, (.000697**2 + .000436**2)**(1/2))
+        p1_tot = p1 * p1_ucal
+        p2_tot = p2 * p2_ucal
         dt = 1 / test_entry.scan_rate_actual * ur.s
         try:
             cd = (
                 4
                 * (d / 2) ** 2
                 * (dx / dt)
-                / (d2**2 * (2 * (p1 - p2) / (rho * (1 - (d2 / d1) ** 4))) ** (1 / 2))
+                / (d2**2 * (2 * (p1_tot - p2_tot) / (rho * (1 - (d2 / d1) ** 4))) ** (1 / 2))
             )
         except Exception as e:
             return e
@@ -494,7 +497,9 @@ class ResultService:
             "rho": [str(rho.magnitude), cd.derivatives[next(iter(rho.derivatives))]],
             "dx": [str(dx.to('in').magnitude), cd.derivatives[next(iter(dx.to('in').derivatives))]],
             "p1": [str(p1.to('psi').magnitude), cd.derivatives[next(iter(p1.to('psi').derivatives))]],
+            "p1_cal": [str(p1_ucal), cd.derivatives[next(iter(p1_ucal.derivatives))]],
             "p2": [str(p2.to('psi').magnitude), cd.derivatives[next(iter(p2.to('psi').derivatives))]],
+            "p2_cal": [str(p2_ucal), cd.derivatives[next(iter(p2_ucal.derivatives))]],
         }
         return cd_dict
 

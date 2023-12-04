@@ -19,7 +19,7 @@ from sqlalchemy import select
 @bp.route("/", methods=["GET", "POST"])
 def index():
     #!!! include image of bar chart of partial derivative UMF of each variable
-    return render_template("base.html")
+    return render_template("index.html")
 
 
 @bp.route("/constants", methods=["GET"])
@@ -85,8 +85,14 @@ def activate_ljconfig(ljconfig_id):
 @bp.route("/test", methods=["GET"])
 def get_tests():
     # display list of tests, with buttons to view result or view test
-    tests = db.session.execute(select(Test)).scalars()
-    return render_template("tests.html", tests=tests)
+    tests_gen = db.session.execute(select(Test)).scalars()
+    test_dict = {}
+    tests_list = []
+    for test in tests_gen:
+        tests_list.append(test)
+        r = ResultService.analyze(test.id)
+        test_dict[test.id] = r['cd'][0] if not isinstance(r, Exception) else "N/A"
+    return render_template("tests.html", tests=tests_list, test_dict=test_dict)
 
 
 @bp.route("/test", methods=["POST"])
@@ -133,8 +139,9 @@ def get_result(test_id):
     cd_dict = ResultService.analyze(test_id)
     if isinstance(cd_dict, dict):
         image = ResultService.get_images(cd_dict, test_id)
-        return render_template("result.html", cd_dict=cd_dict, image=image)
+        return render_template("result.html", cd_dict=cd_dict, image=image, test_id=test_id)
     else:
+        print(cd_dict)
         return redirect(url_for("main.get_test", test_id=test_id))
 
 

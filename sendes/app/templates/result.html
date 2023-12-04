@@ -1,13 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Result{% endblock %}
 {% block content %}
-    <div class="row">
-        <h3>Cd: {{ cd_dict["cd"][0] }}</h3>
-    </div>
+    <h3>Result: {{ test_id }}</h3>
     <img src="{{ image }}">
-    {% for key, val in cd_dict.items() if key != 'cd' %}
-    <div class="row">
-        {{ key }}: {{ val[0] }}
+    <div class="table">
+        <table class="table-striped table-hover">
+            <tr>
+                <th>Variable</th>
+                <th>Nominal +/- Stdev</th>
+                <th>Relative</th>
+                <th>UMF</th>
+            </tr>
+            {% for key, val in cd_dict.items() %}
+            {% if key == "cd" %}
+                <tr class="h5">
+            {% else %}
+                <tr>
+            {% endif %}
+                    <td>{{ key }}</td> 
+                    <td>{{ val[0] }}</td> 
+                    <td>{{ "%.2f"|format(val[0].split('-')[1]|float / val[0].split("+")[0]|float * 100) }}%</td>
+                    <td>{{ "%.2f"|format(val[1]) }}</td>
+                </tr>
+            {% endfor %}
+        </table>
     </div>
-    {% endfor %}
 {% endblock %}

@@ -17,7 +17,7 @@ build/
 *.db
 /archive/sendes/static/*
 /sendes/app/static/*
-
+!/sendes/app/static/cd_eq.png
 !/sendes/app/static/favicon/
 
 # OS

@@ -9,8 +9,10 @@
     <div class="table-responsive">
         <table class="table table-striped table-hover">
                 <tr>
-                    <th>Link</th>
+                    <th>Raw Data</th>
+                    <th>Result</th>
                     <th>Id</th>
+                    <th>Cd</th>
                     <th>Start</th>
                     <th>Finish</th>
                     <th>Duration</th>
@@ -20,8 +22,10 @@
                 </tr>
                 {% for t in tests %}
                     <tr>
-                        <td><a class="btn btn-primary" href="/test/{{t.id}}">View</a></td>
+                        <td><a class="btn btn-primary" href="/test/{{t.id}}">View Test</a></td>
+                        <td><a class="btn btn-primary" href="/result/{{t.id}}">View Result</a></td>
                         <td>{{ t.id }}</td>
+                        <td>{{ test_dict[t.id] }}</td>
                         <td>{{ t.start }}</td>
                         <td>{{ t.finish }}</td>
                         <td>{{ t.duration }}</td>
