@@ -169,7 +169,7 @@ class TestService:
         # ljm config object creation
         aConfig = {
             "AIN_ALL_NEGATIVE_CH": ljconfig.ain_all_negative_ch,
-            "AIN0_RANGE": 1,
+            "AIN0_RANGE": 10,
             "AIN1_RANGE": 1,
             "AIN2_RANGE": 1,
             "STREAM_SETTLING_US": ljconfig.stream_settling_us,
@@ -453,8 +453,8 @@ class ResultService:
         Given a Test and constants entry, get dx ufloat and pressure quantity_ufloats (constants contain xducer calibration)
         """
         dx = ResultService.v2l(ufloat_fromstr(t.ufloat_vdx) * ur.volt)
-        p1 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp1) * ur.volt, "p1", c) 
-        p2 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp2) * ur.volt, "p2", c) 
+        p1 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp1) * ur.volt, "p1", c)
+        p2 = ResultService.v2p(ufloat_fromstr(t.ufloat_vp2) * ur.volt, "p2", c)
         return dx, p1, p2
 
     @staticmethod
@@ -473,33 +473,62 @@ class ResultService:
 
         d, d1, d2, rho = ConstantsService.get_vars(constants)
         dx, p1, p2 = ResultService.get_vars(test_entry, constants)
-        p1_ucal = ufloat(1, (.000226**2 + .000635**2)**(1/2))
-        p2_ucal = ufloat(1, (.000697**2 + .000436**2)**(1/2))
+
+        p1_ucal = ufloat(1, (0.000697**2 + 0.000436**2) ** (1 / 2))
+        p2_ucal = ufloat(1, (0.000226**2 + 0.000635**2) ** (1 / 2))
         p1_tot = p1 * p1_ucal
         p2_tot = p2 * p2_ucal
-        dt = 1 / test_entry.scan_rate_actual * ur.s
+        sample_period = 1 / test_entry.scan_rate_actual
+        dt = ufloat(sample_period, (sample_period * 267) ** (1 / 2) * 1.6552e-8) * ur.s
         try:
             cd = (
                 4
                 * (d / 2) ** 2
                 * (dx / dt)
-                / (d2**2 * (2 * (p1_tot - p2_tot) / (rho * (1 - (d2 / d1) ** 4))) ** (1 / 2))
+                / (
+                    d2**2
+                    * (2 * (p1_tot - p2_tot) / (rho * (1 - (d2 / d1) ** 4))) ** (1 / 2)
+                )
             )
         except Exception as e:
             return e
-            
+
         # variable : [ ufloat_str, umf ]
         cd_dict = {
             "cd": [str(cd.magnitude), 1],
-            "d": [str(d.to('in').magnitude), cd.derivatives[next(iter(d.to('in').derivatives))]],
-            "d1": [str(d1.to('in').magnitude), cd.derivatives[next(iter(d1.to('in').derivatives))]],
-            "d2": [str(d2.to('in').magnitude), cd.derivatives[next(iter(d2.to('in').derivatives))]],
-            "rho": [str(rho.magnitude), cd.derivatives[next(iter(rho.derivatives))]],
-            "dx": [str(dx.to('in').magnitude), cd.derivatives[next(iter(dx.to('in').derivatives))]],
-            "p1": [str(p1.to('psi').magnitude), cd.derivatives[next(iter(p1.to('psi').derivatives))]],
-            "p1_cal": [str(p1_ucal), cd.derivatives[next(iter(p1_ucal.derivatives))]],
-            "p2": [str(p2.to('psi').magnitude), cd.derivatives[next(iter(p2.to('psi').derivatives))]],
-            "p2_cal": [str(p2_ucal), cd.derivatives[next(iter(p2_ucal.derivatives))]],
+            "d": [
+                str(d.to("in").magnitude),
+                abs(cd.derivatives[next(iter(d.to("in").derivatives))]),
+            ],
+            "d1": [
+                str(d1.to("in").magnitude),
+                abs(cd.derivatives[next(iter(d1.to("in").derivatives))]),
+            ],
+            "d2": [
+                str(d2.to("in").magnitude),
+                abs(cd.derivatives[next(iter(d2.to("in").derivatives))]),
+            ],
+            "rho": [str(rho.magnitude), abs(cd.derivatives[next(iter(rho.derivatives))])],
+            "dx": [
+                str(dx.to("in").magnitude),
+                abs(cd.derivatives[next(iter(dx.to("in").derivatives))]),
+            ],
+            "dt": [str(dt.magnitude), abs(cd.derivatives[next(iter(dt.derivatives))])],
+            #"p1": [
+            #    str(p1.to("psi").magnitude),
+            #    abs(cd.derivatives[next(iter(p1.to("psi").derivatives))]),
+            #],
+            #"p1_cal": [str(p1_ucal), abs(cd.derivatives[next(iter(p1_ucal.derivatives))])],
+            #"p2": [
+            #    str(p2.to("psi").magnitude),
+            #    abs(cd.derivatives[next(iter(p2.to("psi").derivatives))]),
+            #],
+            #"p2_cal": [str(p2_ucal), abs(cd.derivatives[next(iter(p2_ucal.derivatives))])],
+            "dp": [
+                str(p1_tot.to("psi").magnitude -  p2_tot.to("psi").magnitude),
+                (cd.derivatives[next(iter(p1_tot.to("psi").derivatives))]**2 +
+                cd.derivatives[next(iter(p2_tot.to("psi").derivatives))]**2)**(1/2),
+            ],
         }
         return cd_dict
 
@@ -530,24 +559,21 @@ class ResultService:
         percentage_img = f"/static/results/{test_id}_{t.window_start}_{t.window_finish}_{t.constants_id if const_id is None else const_id}_uPer.png"
 
         if not os.path.isfile(f"{base}{percentage_img}"):
-            if any(ufloat_fromstr(val[0]).n == 0 for val in cd_dict.values()):
-                percentage_img = "https://www.publicdomainpictures.net/pictures/380000/velka/error-message.jpg"
-            else:
-                densq = sum((ufloat_fromstr(lis[0]).s / ufloat_fromstr(lis[0]).n * lis[1])**2 for key, lis in cd_dict.items() if key != "cd" )
-                plt.clf()
-                plt.bar(
-                    x=[var for var in cd_dict.keys() if var != "cd"],
-                    height=[
-                        ((lis[1] * ufloat_fromstr(lis[0]).s / ufloat_fromstr(lis[0]).n))**2 / densq
-                        for key, lis in cd_dict.items()
-                        if key != "cd"
-                    ],
-                    color="blue"
-                )
+            urels_wrt_cd = [(ufloat_fromstr(lis[0]).s / (ufloat_fromstr(lis[0]).n if ufloat_fromstr(lis[0]).n != 0 else 1e-10) * lis[1]) ** 2
+                for key, lis in cd_dict.items()
+                if key != "cd"
+            ]
+            sum_urels_wrt_cd = sum(urels_wrt_cd)
+            plt.clf()
+            plt.bar(
+                x=[var for var in cd_dict.keys() if var != "cd"],
+                height=[ uwc / sum_urels_wrt_cd for uwc in urels_wrt_cd],
+                color="blue",
+            )
 
-                plt.xlabel("Variable")
-                plt.ylabel("Percentage Uncertainty wrt CD")
-                plt.savefig(f"{base}{percentage_img}")
+            plt.xlabel("Variable")
+            plt.ylabel("Percentage Uncertainty wrt CD")
+            plt.savefig(f"{base}{percentage_img}")
 
         return percentage_img
 

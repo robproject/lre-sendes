@@ -13,6 +13,7 @@
                     <th>Result</th>
                     <th>Id</th>
                     <th>Cd</th>
+                    <th>Cd Rel</th>
                     <th>Start</th>
                     <th>Finish</th>
                     <th>Duration</th>
@@ -26,6 +27,11 @@
                         <td><a class="btn btn-primary" href="/result/{{t.id}}">View Result</a></td>
                         <td>{{ t.id }}</td>
                         <td>{{ test_dict[t.id] }}</td>
+                        {% if test_dict[t.id] == "N/A" %}
+                            <td>N/A</td>
+                        {% else %}
+                            <td>{{ "%.2f"|format(test_dict[t.id].split('-')[1]|float / test_dict[t.id].split("+")[0]|float * 100) }}%</td>
+                        {% endif %}
                         <td>{{ t.start }}</td>
                         <td>{{ t.finish }}</td>
                         <td>{{ t.duration }}</td>

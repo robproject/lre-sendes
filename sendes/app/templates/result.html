@@ -19,7 +19,11 @@
             {% endif %}
                     <td>{{ key }}</td> 
                     <td>{{ val[0] }}</td> 
-                    <td>{{ "%.2f"|format(val[0].split('-')[1]|float / val[0].split("+")[0]|float * 100) }}%</td>
+                    {% if val[0].split("+")[0]|float == 0 %}
+                        <td>Div 0</td>
+                    {% else %}
+                        <td>{{ "%.2f"|format(val[0].split('-')[1]|float / val[0].split("+")[0]|float * 100) }}%</td>
+                    {% endif %}
                     <td>{{ "%.2f"|format(val[1]) }}</td>
                 </tr>
             {% endfor %}
