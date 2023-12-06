@@ -375,7 +375,7 @@ class TestService:
             plt.savefig(f"{base}{raw_v}", bbox_inches="tight")
 
             # Delta plot
-            x_scale = 100
+            x_scale = 10
             tt = tt[:-1]
             fig, ax = plt.subplots()
             ax.plot(tt, np.diff(scans["ain2"]) * x_scale, label="$\Delta V_X$")
@@ -406,7 +406,7 @@ class TestService:
             ax.set_xlabel("Seconds")
             ax.legend(
                 [vdx, (vp1, vp2)],
-                ["$\\frac{100\Delta V_X}{\Delta t}$", "$\Delta V_P$"],
+                ["$\\frac{10\Delta V_X}{\Delta t}$", "$\Delta V_P$"],
                 loc="center left",
             )
             ax.set_title("Processed Raw Data")
@@ -491,7 +491,7 @@ class ResultService:
         except Exception as e:
             return e
 
-        # original variable : [ ufloat_str, partial of wrt cd]
+        #  { key : [ ufloat_str: x+/-ux, partial wrt cd: ∂Cd/∂x, unit ] }
         cd_dict = {
             "cd": [str(cd.magnitude), 1, ""],
             "d": [
@@ -514,23 +514,24 @@ class ResultService:
                 cd.derivatives[next(iter(rho.derivatives))],
                 "kg/m3",
             ],
-            "dx": [
+            "vdx": [
                 str(*dx.derivatives.keys()),
                 cd.derivatives[next(iter(dx.derivatives))],
                 "v",
             ],
             "dt": [str(dt.magnitude), cd.derivatives[next(iter(dt.derivatives))], "s"],
-            "p1": [
+            "vp1": [
                 str(*p1.derivatives.keys()),
                 cd.derivatives[next(iter(p1.derivatives))],
                 "v",
             ],
-            "p2": [
+            "vp2": [
                 str(*p2.derivatives.keys()),
                 cd.derivatives[next(iter(p2.derivatives))],
                 "v",
             ],
         }
+        ResultService.process_dict(cd_dict, constants)
         return cd_dict
 
     @staticmethod
@@ -553,43 +554,44 @@ class ResultService:
         """Given voltage, return distance quantity_ufloat"""
         return (v * 7.853 * ur.inch / ur.V).to("m")
 
+        
     @staticmethod
-    def get_images(cd_dict: dict, test_id: int, const_id: int = None) -> str:
-        t = db.session.get(Test, test_id)
-        base = "sendes/app"
-        percentage_img = f"/static/results/{test_id}_{t.window_start}_{t.window_finish}_{t.constants_id if const_id is None else const_id}_uPer.png"
-        # UPC = (dCd/dx * ux/ucd) **2
-        upcs = []
-        umfs = []
-        urels = []
+    def process_dict(cd_dict: dict, c: Constants) -> None:
+        """
+        Adds UPC and UMF values to cd_dict, as well as actual reading values from voltages
+        UPC = (dCd/dx * ux/ucd) **2
+        UMF = (dCd/dx * x/cd)
+        """
         u_cd = ufloat_fromstr(cd_dict["cd"][0])
         for key, lis in cd_dict.items():
             u_val = ufloat_fromstr(lis[0])
             if key != "cd":
                 upc = (lis[1] * u_val.s / u_cd.s) ** 2
                 cd_dict[key].append(upc)
-                upcs.append(upc)
-
                 umf = lis[1] * u_val.n / u_cd.n
                 cd_dict[key].append(umf)
-                umfs.append(umf)
-                urels.append(u_val.s / u_val.n)
-
-                if key == "p1" or key == "p2":
+                if key == "vp1" or key == "vp2":
                     cd_dict[key].append(
-                        ResultService.v2p(
-                            u_val * ur.V, key, db.session.get(Constants, t.constants_id)
-                        ).to("psi")
-                    )
-
+                        ResultService.v2p(u_val * ur.V, key[1:], c).to("psi").m)
+                elif key == 'vdx':
+                    cd_dict[key].append(
+                        ResultService.v2l(u_val * ur.V).to("in").m)
             else:
                 cd_dict[key].extend([1, 1])
+
+
+
+    @staticmethod
+    def get_images(cd_dict: dict, test_id: int, const_id: int = None) -> str:
+        t = db.session.get(Test, test_id)
+        base = "sendes/app"
+        percentage_img = f"/static/results/{test_id}_{t.window_start}_{t.window_finish}_{t.constants_id if const_id is None else const_id}_uPer.png"
 
         if not os.path.isfile(f"{base}{percentage_img}"):
             plt.clf()
             plt.bar(
                 x=[key for key in cd_dict.keys() if key != "cd"],
-                height=upcs,
+                height=[lis[2] for key, lis in cd_dict.items() if key != "cd"],
                 color="blue",
             )
 
