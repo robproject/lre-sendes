@@ -591,7 +591,7 @@ class ResultService:
             plt.clf()
             plt.bar(
                 x=[key for key in cd_dict.keys() if key != "cd"],
-                height=[lis[2] for key, lis in cd_dict.items() if key != "cd"],
+                height=[lis[3] for key, lis in cd_dict.items() if key != "cd"],
                 color="blue",
             )
 
