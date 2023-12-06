@@ -477,8 +477,8 @@ class ResultService:
         dx, p1, p2 = ResultService.get_vars(test_entry, constants)
 
         # add linearity and hysteresis
-        p1.s = (p1.s**2 + (p1.n*0.000697)**2 + (p1.n*0.000436)**2) ** (1 / 2)
-        p2.s = (p2.s**2 + (p1.n*0.000226)**2 + (p1.n*0.000635)**2) ** (1 / 2)
+        p1.s = (p1.s**2 + (p1.n * 0.000697) ** 2 + (p1.n * 0.000436) ** 2) ** (1 / 2)
+        p2.s = (p2.s**2 + (p1.n * 0.000226) ** 2 + (p1.n * 0.000635) ** 2) ** (1 / 2)
         sample_period = 1 / test_entry.scan_rate_actual
         dt = ufloat(sample_period, (sample_period * 267) ** (1 / 2) * 1.6552e-8) * ur.s
         try:
@@ -493,42 +493,42 @@ class ResultService:
 
         # original variable : [ ufloat_str, partial of wrt cd]
         cd_dict = {
-            "cd": [str(cd.magnitude), 1,""],
+            "cd": [str(cd.magnitude), 1, ""],
             "d": [
                 str(d.to("in").magnitude),
                 cd.derivatives[next(iter(d.derivatives))],
-                "in"
+                "in",
             ],
             "d1": [
                 str(d1.to("in").magnitude),
                 cd.derivatives[next(iter(d1.derivatives))],
-                "in"
+                "in",
             ],
             "d2": [
                 str(d2.to("in").magnitude),
                 cd.derivatives[next(iter(d2.derivatives))],
-                "in"
+                "in",
             ],
             "rho": [
                 str(rho.magnitude),
                 cd.derivatives[next(iter(rho.derivatives))],
-                "kg/m3"
+                "kg/m3",
             ],
             "dx": [
                 str(*dx.derivatives.keys()),
                 cd.derivatives[next(iter(dx.derivatives))],
-                "v"
+                "v",
             ],
             "dt": [str(dt.magnitude), cd.derivatives[next(iter(dt.derivatives))], "s"],
             "p1": [
                 str(*p1.derivatives.keys()),
                 cd.derivatives[next(iter(p1.derivatives))],
-                "v"
+                "v",
             ],
             "p2": [
                 str(*p2.derivatives.keys()),
                 cd.derivatives[next(iter(p2.derivatives))],
-                "v"
+                "v",
             ],
         }
         return cd_dict
@@ -536,7 +536,7 @@ class ResultService:
     @staticmethod
     def v2p(v: Quantity, p: str, c: Constants) -> Quantity:
         """
-        Given voltage, transducer designator (1 or 2), and constants entry, returns pressure quantity_ufloat
+        Given voltage, transducer designator (p1 or p2), and constants entry, returns pressure quantity_ufloat
         """
         return (
             (
@@ -565,18 +565,25 @@ class ResultService:
         u_cd = ufloat_fromstr(cd_dict["cd"][0])
         for key, lis in cd_dict.items():
             u_val = ufloat_fromstr(lis[0])
-            if key !="cd":
-                upc = (lis[1]* u_val.s/ u_cd.s)** 2
+            if key != "cd":
+                upc = (lis[1] * u_val.s / u_cd.s) ** 2
                 cd_dict[key].append(upc)
                 upcs.append(upc)
 
-                umf = lis[1] * u_val.n/ u_cd.n
+                umf = lis[1] * u_val.n / u_cd.n
                 cd_dict[key].append(umf)
                 umfs.append(umf)
-                urels.append(u_val.s/u_val.n)
+                urels.append(u_val.s / u_val.n)
+
+                if key == "p1" or key == "p2":
+                    cd_dict[key].append(
+                        ResultService.v2p(
+                            u_val * ur.V, key, db.session.get(Constants, t.constants_id)
+                        ).to("psi")
+                    )
 
             else:
-                cd_dict[key].extend([1,1])
+                cd_dict[key].extend([1, 1])
 
         if not os.path.isfile(f"{base}{percentage_img}"):
             plt.clf()
