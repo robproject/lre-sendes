@@ -574,8 +574,9 @@ class ResultService:
                     cd_dict[key].append(
                         ResultService.v2p(u_val * ur.V, key[1:], c).to("psi").m)
                 elif key == 'vdx':
-                    cd_dict[key].append(
-                        ResultService.v2l(u_val * ur.V).to("in").m)
+                    cd_dict[key].extend(
+                        [ResultService.v2l(u_val * ur.V).to("in").m,
+                        u_val.s/u_val.n *100 if u_val.n > 0 else 100])
             else:
                 cd_dict[key].extend([1, 1])
 

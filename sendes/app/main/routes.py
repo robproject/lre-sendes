@@ -91,7 +91,7 @@ def get_tests():
     for test in tests_gen:
         tests_list.append(test)
         r = ResultService.analyze(test.id)
-        test_dict[test.id] = [r['cd'][0], r['vdx'][-1], r['vp1'][-1], r['vp2'][-1]] if not isinstance(r, Exception) else ["N/A"]*4
+        test_dict[test.id] = [r['cd'][0], r['vdx'][-2], r['vp1'][-1], r['vp2'][-1], r['vdx'][-1]] if not isinstance(r, Exception) else ["N/A"]*5
     return render_template("tests.html", tests=tests_list, test_dict=test_dict)
 
 
