@@ -2,14 +2,20 @@
 {% block title %}Result{% endblock %}
 {% block content %}
     <h3>Result: {{ test_id }}</h3>
+    <div class="col mt-5">
+        <a class="btn btn-primary" href="/test/{{test_id}}">View Test</a>
+    </div>
     <img src="{{ image }}">
     <div class="table">
         <table class="table-striped table-hover">
             <tr>
                 <th>Variable</th>
-                <th>Nominal +/- Stdev</th>
-                <th>Relative</th>
-                <th>UMF</th>
+                <th>Units</th>
+                <th>Nominal +/- Stdev<blockquote>$X \pm U_X$</blockquote></th>
+                <th>U Relative<blockquote>$\frac{U_X}{X}$</blockquote></th>
+                <th>Partial<blockquote>$\frac{\partial C_D}{\partial X}$</blockquote></th>
+                <th>UPC<blockquote>$\displaystyle(\frac{\partial C_D}{\partial X}\frac{U_x}{U_{C_D}}\displaystyle)^2$</blockquote></th>
+                <th>UMF<blockquote>$\displaystyle(\frac{\partial C_D}{\partial X}\frac{X}{C_D}\displaystyle)$</blockquote></th>
             </tr>
             {% for key, val in cd_dict.items() %}
             {% if key == "cd" %}
@@ -18,6 +24,7 @@
                 <tr>
             {% endif %}
                     <td>{{ key }}</td> 
+                    <td>{{ val[2] }}</td>
                     <td>{{ val[0] }}</td> 
                     {% if val[0].split("+")[0]|float == 0 %}
                         <td>Div 0</td>
@@ -25,6 +32,8 @@
                         <td>{{ "%.2f"|format(val[0].split('-')[1]|float / val[0].split("+")[0]|float * 100) }}%</td>
                     {% endif %}
                     <td>{{ "%.2f"|format(val[1]) }}</td>
+                    <td>{{ "%.2f"|format(val[3]*100)}}%</td>
+                    <td>{{ "%.2f"|format(val[4])}}</td>
                 </tr>
             {% endfor %}
         </table>

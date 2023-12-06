@@ -7,6 +7,8 @@ import sys, os
 from datetime import datetime, timedelta
 import numpy as np
 from matplotlib import pyplot as plt, lines
+
+plt.switch_backend("Agg")
 from uncertainties import ufloat, ufloat_fromstr
 from pint import Quantity
 from labjack import ljm
@@ -474,10 +476,9 @@ class ResultService:
         d, d1, d2, rho = ConstantsService.get_vars(constants)
         dx, p1, p2 = ResultService.get_vars(test_entry, constants)
 
-        p1_ucal = ufloat(1, (0.000697**2 + 0.000436**2) ** (1 / 2))
-        p2_ucal = ufloat(1, (0.000226**2 + 0.000635**2) ** (1 / 2))
-        p1_tot = p1 * p1_ucal
-        p2_tot = p2 * p2_ucal
+        # add linearity and hysteresis
+        p1.s = (p1.s**2 + (p1.n*0.000697)**2 + (p1.n*0.000436)**2) ** (1 / 2)
+        p2.s = (p2.s**2 + (p1.n*0.000226)**2 + (p1.n*0.000635)**2) ** (1 / 2)
         sample_period = 1 / test_entry.scan_rate_actual
         dt = ufloat(sample_period, (sample_period * 267) ** (1 / 2) * 1.6552e-8) * ur.s
         try:
@@ -485,49 +486,49 @@ class ResultService:
                 4
                 * (d / 2) ** 2
                 * (dx / dt)
-                / (
-                    d2**2
-                    * (2 * (p1_tot - p2_tot) / (rho * (1 - (d2 / d1) ** 4))) ** (1 / 2)
-                )
+                / (d2**2 * (2 * (p1 - p2) / (rho * (1 - (d2 / d1) ** 4))) ** (1 / 2))
             )
         except Exception as e:
             return e
 
-        # variable : [ ufloat_str, umf ]
+        # original variable : [ ufloat_str, partial of wrt cd]
         cd_dict = {
-            "cd": [str(cd.magnitude), 1],
+            "cd": [str(cd.magnitude), 1,""],
             "d": [
                 str(d.to("in").magnitude),
-                abs(cd.derivatives[next(iter(d.to("in").derivatives))]),
+                cd.derivatives[next(iter(d.derivatives))],
+                "in"
             ],
             "d1": [
                 str(d1.to("in").magnitude),
-                abs(cd.derivatives[next(iter(d1.to("in").derivatives))]),
+                cd.derivatives[next(iter(d1.derivatives))],
+                "in"
             ],
             "d2": [
                 str(d2.to("in").magnitude),
-                abs(cd.derivatives[next(iter(d2.to("in").derivatives))]),
+                cd.derivatives[next(iter(d2.derivatives))],
+                "in"
             ],
-            "rho": [str(rho.magnitude), abs(cd.derivatives[next(iter(rho.derivatives))])],
+            "rho": [
+                str(rho.magnitude),
+                cd.derivatives[next(iter(rho.derivatives))],
+                "kg/m3"
+            ],
             "dx": [
-                str(dx.to("in").magnitude),
-                abs(cd.derivatives[next(iter(dx.to("in").derivatives))]),
+                str(*dx.derivatives.keys()),
+                cd.derivatives[next(iter(dx.derivatives))],
+                "v"
             ],
-            "dt": [str(dt.magnitude), abs(cd.derivatives[next(iter(dt.derivatives))])],
-            #"p1": [
-            #    str(p1.to("psi").magnitude),
-            #    abs(cd.derivatives[next(iter(p1.to("psi").derivatives))]),
-            #],
-            #"p1_cal": [str(p1_ucal), abs(cd.derivatives[next(iter(p1_ucal.derivatives))])],
-            #"p2": [
-            #    str(p2.to("psi").magnitude),
-            #    abs(cd.derivatives[next(iter(p2.to("psi").derivatives))]),
-            #],
-            #"p2_cal": [str(p2_ucal), abs(cd.derivatives[next(iter(p2_ucal.derivatives))])],
-            "dp": [
-                str(p1_tot.to("psi").magnitude -  p2_tot.to("psi").magnitude),
-                (cd.derivatives[next(iter(p1_tot.to("psi").derivatives))]**2 +
-                cd.derivatives[next(iter(p2_tot.to("psi").derivatives))]**2)**(1/2),
+            "dt": [str(dt.magnitude), cd.derivatives[next(iter(dt.derivatives))], "s"],
+            "p1": [
+                str(*p1.derivatives.keys()),
+                cd.derivatives[next(iter(p1.derivatives))],
+                "v"
+            ],
+            "p2": [
+                str(*p2.derivatives.keys()),
+                cd.derivatives[next(iter(p2.derivatives))],
+                "v"
             ],
         }
         return cd_dict
@@ -557,17 +558,31 @@ class ResultService:
         t = db.session.get(Test, test_id)
         base = "sendes/app"
         percentage_img = f"/static/results/{test_id}_{t.window_start}_{t.window_finish}_{t.constants_id if const_id is None else const_id}_uPer.png"
+        # UPC = (dCd/dx * ux/ucd) **2
+        upcs = []
+        umfs = []
+        urels = []
+        u_cd = ufloat_fromstr(cd_dict["cd"][0])
+        for key, lis in cd_dict.items():
+            u_val = ufloat_fromstr(lis[0])
+            if key !="cd":
+                upc = (lis[1]* u_val.s/ u_cd.s)** 2
+                cd_dict[key].append(upc)
+                upcs.append(upc)
+
+                umf = lis[1] * u_val.n/ u_cd.n
+                cd_dict[key].append(umf)
+                umfs.append(umf)
+                urels.append(u_val.s/u_val.n)
+
+            else:
+                cd_dict[key].extend([1,1])
 
         if not os.path.isfile(f"{base}{percentage_img}"):
-            urels_wrt_cd = [(ufloat_fromstr(lis[0]).s / (ufloat_fromstr(lis[0]).n if ufloat_fromstr(lis[0]).n != 0 else 1e-10) * lis[1]) ** 2
-                for key, lis in cd_dict.items()
-                if key != "cd"
-            ]
-            sum_urels_wrt_cd = sum(urels_wrt_cd)
             plt.clf()
             plt.bar(
-                x=[var for var in cd_dict.keys() if var != "cd"],
-                height=[ uwc / sum_urels_wrt_cd for uwc in urels_wrt_cd],
+                x=[key for key in cd_dict.keys() if key != "cd"],
+                height=upcs,
                 color="blue",
             )
 

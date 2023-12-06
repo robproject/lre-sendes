@@ -14,6 +14,9 @@
                     <th>Id</th>
                     <th>Cd</th>
                     <th>Cd Rel</th>
+                    <th>vp1</th>
+                    <th>vp2</th>
+                    <th>vdx</th>
                     <th>Start</th>
                     <th>Finish</th>
                     <th>Duration</th>
@@ -32,6 +35,9 @@
                         {% else %}
                             <td>{{ "%.2f"|format(test_dict[t.id].split('-')[1]|float / test_dict[t.id].split("+")[0]|float * 100) }}%</td>
                         {% endif %}
+                        <td>{{ t.ufloat_vp1 }}</td>
+                        <td>{{ t.ufloat_vp2 }}</td>
+                        <td>{{ t.ufloat_vdx }}</td>
                         <td>{{ t.start }}</td>
                         <td>{{ t.finish }}</td>
                         <td>{{ t.duration }}</td>
