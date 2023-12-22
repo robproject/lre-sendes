@@ -11,6 +11,7 @@
         <table class="table table-striped table-hover">
         <tr>
             <th>Status</th>
+            <th>Id</th>
             <th>Scan Rate</th>
             <th>Read Count</th>
             <th>Stream Settling (us)</th>
@@ -33,6 +34,7 @@
                         <td style="font-weight:bold; font-size:15.5pt;">INVALID</td>
                     {% endif %}
                 {% endif %}
+                <td>{{ l.id }}</td>
                 <td>{{ l.scan_rate }}</td>
                 <td>{{ l.read_count }}</td>
                 <td>{{ l.stream_settling_us }}</td>

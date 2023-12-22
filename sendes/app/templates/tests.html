@@ -20,6 +20,7 @@
                     <th>P1 psi</th>
                     <th>P2 psi</th>
                     <th>Duration s</th>
+                    <th>Air Pressure PSI</th>
                     <th>LJConifg Id</th>
                     <th>Constants Id</th>
                 </tr>
@@ -28,6 +29,7 @@
                     <th></th>
                     <th></th>
                     <th></th>
+                    <th><input type="text" placeholder="Search Raw Data" name="search-raw-data" /></th>
                     <th><input type="text" placeholder="Search Raw Data" name="search-raw-data" /></th>
                     <th><input type="text" placeholder="Search Raw Data" name="search-raw-data" /></th>
                     <th><input type="text" placeholder="Search Raw Data" name="search-raw-data" /></th>
@@ -61,6 +63,7 @@
                         <td>{{ test_dict[t.id][2]}}</td>
                         <td>{{ test_dict[t.id][3]}}</td>
                         <td>{{ "%.2f"|format(t.duration|float) }}</td>
+                        <td>{{ "%.2f"|format(t.air_pressure|float) }}</td>
                         <td>{{ t.ljconfig_id }}</td>
                         <td>{{ t.constants_id }}</td>
                     </tr>
@@ -86,6 +89,7 @@
                 null,
                 null,
                 null,
+                { "type": "num"},
                 { "type": "num"},
                 { "type": "num"},
                 { "type": "num"},

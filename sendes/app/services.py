@@ -1,17 +1,17 @@
+import sys, os
+from datetime import datetime, timedelta
+
+import numpy as np
+from matplotlib import pyplot as plt, lines
+from uncertainties import ufloat, ufloat_fromstr
+from pint import Quantity
+from sqlalchemy import select, and_, inspect
+from labjack import ljm
+
 from app.extensions import db, ur, console
 from app.models import Constants, Ljconfig, Test, StreamRead, Scan
 
-from sqlalchemy import select, and_, inspect
-
-import sys, os
-from datetime import datetime, timedelta
-import numpy as np
-from matplotlib import pyplot as plt, lines
-
 plt.switch_backend("Agg")
-from uncertainties import ufloat, ufloat_fromstr
-from pint import Quantity
-from labjack import ljm
 
 
 class ConstantsService:
@@ -150,12 +150,12 @@ class TestService:
             style="magenta",
         )
 
-        # Stream Configuration
+        # Stream Configuration.
         aScanListNames = ["AIN0", "AIN1", "AIN2"]  # Scan list names to stream
         numAddresses = len(aScanListNames)
         aScanList = ljm.namesToAddresses(numAddresses, aScanListNames)[0]
 
-        # ljm config
+        # Get data from LJConfig.
         scanRate = ljconfig.scan_rate
         scansPerRead = ljconfig.buffer_size
         MAX_REQUESTS = ljconfig.read_count
@@ -168,7 +168,6 @@ class TestService:
         # individual analog inputs, but the stream has only one settling time and
         # resolution.
 
-        # ljm config object creation
         aConfig = {
             "AIN_ALL_NEGATIVE_CH": ljconfig.ain_all_negative_ch,
             "AIN0_RANGE": 10,
@@ -179,7 +178,7 @@ class TestService:
         }
 
         try:
-            # lj stream config
+            # Stream configuration.
             # Ensure triggered stream is disabled.
             ljm.eWriteName(handle, "STREAM_TRIGGER_INDEX", 0)
             # Enabling internally-clocked stream.
@@ -188,7 +187,7 @@ class TestService:
             # and stream resolution configuration.
             ljm.eWriteNames(handle, len(aConfig), aConfig.keys(), aConfig.values())
 
-            # Configure and start stream
+            # Configure and start stream.
             sync_1 = datetime.now()
             scanRate = ljm.eStreamStart(
                 handle, scansPerRead, numAddresses, aScanList, scanRate
@@ -196,7 +195,7 @@ class TestService:
             sync_2 = datetime.now()
             start = sync_1 + (sync_2 - sync_1) / 2
 
-            # start test
+            # Start test.
             if live:
                 ljm.eWriteName(handle, "DAC0", 5)
                 console.print("valve opened", style="magenta")
@@ -209,10 +208,10 @@ class TestService:
 
             ljmScanBacklog = 0
             totScans = 0
-            totSkip = 0  # Total skipped samples
+            totSkip = 0  # Total skipped samples.
             i = 1
             while i <= MAX_REQUESTS:
-                # stop test
+                # Stop test.
                 if i == MAX_REQUESTS and live:
                     ljm.eWriteName(handle, "DAC0", 0)
                     console.print("valve closed", style="magenta")
@@ -225,7 +224,7 @@ class TestService:
                 totScans += scans
 
                 if i == 1 and aData:
-                    # initialize test db entry
+                    # Initialize test db entry.
                     w_start, w_finish = LjconfigService.get_default_window(ljconfig)
                     test_entry = Test(
                         start=start.isoformat(),
@@ -250,13 +249,12 @@ class TestService:
                 skipped = curSkip / numAddresses
                 totSkip += curSkip
 
-                # create stream entry and scan bulk insert
+                # Create stream entry and scan bulk insert.
                 stream_read_entry = StreamRead(
                     stream_i=i,
                     skipped=skipped,
                     lj_backlog=ljScanBacklog,
                     ljm_backlog=ljmScanBacklog,
-                    # test_id=test_entry.id,
                 )
                 test_entry.stream_reads.append(stream_read_entry)
 
@@ -265,7 +263,6 @@ class TestService:
                         ain0=aData[k],
                         ain1=aData[k + 1],
                         ain2=aData[k + 2]
-                        # "stream_read_id": stream_read_entry.id,
                     )
                     stream_read_entry.scans.append(scan_entry)
 
@@ -276,7 +273,7 @@ class TestService:
                 )
                 i += 1
 
-            # update test entry
+            # Update test entry.
             end = datetime.now()
             tt = (end - start).seconds + float((end - start).microseconds) / 1000000
             test_entry.finish = end.isoformat()
@@ -347,7 +344,7 @@ class TestService:
             scans = [(s.ain0, s.ain1, s.ain2) for s in t.scans]
             scans = np.array(scans, dtype=dtype)
 
-            # Raw plot
+            # Raw plot of test data without calculation.
             fig, ax = plt.subplots()
             ax.plot(tt, scans["ain2"], label="$V_X$")
             ax.plot(tt, scans["ain0"], label="$V_{P1}$")
@@ -371,10 +368,10 @@ class TestService:
             secxax = ax.secondary_xaxis("top", functions=(forward, inverse))
             secxax.set_xlabel("Sample")
 
-            # Save the figure
+            # Save the figure to static folder for future access.
             plt.savefig(f"{base}{raw_v}", bbox_inches="tight")
 
-            # Delta plot
+            # Plot data as calculated for.
             x_scale = 10
             tt = tt[:-1]
             fig, ax = plt.subplots()
@@ -476,7 +473,7 @@ class ResultService:
         d, d1, d2, rho = ConstantsService.get_vars(constants)
         dx, p1, p2 = ResultService.get_vars(test_entry, constants)
 
-        # add linearity and hysteresis
+        # Add linearity and hysteresis uncertainties.
         p1.s = (p1.s**2 + (p1.n * 0.000697) ** 2 + (p1.n * 0.000436) ** 2) ** (1 / 2)
         p2.s = (p2.s**2 + (p1.n * 0.000226) ** 2 + (p1.n * 0.000635) ** 2) ** (1 / 2)
         sample_period = 1 / test_entry.scan_rate_actual
@@ -491,7 +488,7 @@ class ResultService:
         except Exception as e:
             return e
 
-        #  { key : [ ufloat_str: x+/-ux, partial wrt cd: ∂Cd/∂x, unit ] }
+        # Format for below dictionary.  { key : [ ufloat_str: x+/-ux, partial wrt cd: ∂Cd/∂x, unit ] }
         cd_dict = {
             "cd": [str(cd.magnitude), 1, ""],
             "d": [
@@ -554,7 +551,6 @@ class ResultService:
         """Given voltage, return distance quantity_ufloat"""
         return (v * 7.853 * ur.inch / ur.V).to("m")
 
-        
     @staticmethod
     def process_dict(cd_dict: dict, c: Constants) -> None:
         """
@@ -572,15 +568,17 @@ class ResultService:
                 cd_dict[key].append(umf)
                 if key == "vp1" or key == "vp2":
                     cd_dict[key].append(
-                        ResultService.v2p(u_val * ur.V, key[1:], c).to("psi").m)
-                elif key == 'vdx':
+                        ResultService.v2p(u_val * ur.V, key[1:], c).to("psi").m
+                    )
+                elif key == "vdx":
                     cd_dict[key].extend(
-                        [ResultService.v2l(u_val * ur.V).to("in").m,
-                        u_val.s/u_val.n *100 if u_val.n > 0 else 100])
+                        [
+                            ResultService.v2l(u_val * ur.V).to("in").m,
+                            u_val.s / u_val.n * 100 if u_val.n > 0 else 100,
+                        ]
+                    )
             else:
                 cd_dict[key].extend([1, 1])
-
-
 
     @staticmethod
     def get_images(cd_dict: dict, test_id: int, const_id: int = None) -> str:
@@ -604,7 +602,7 @@ class ResultService:
 
 
 class dbService:
-    # gets existing row based on unique constraint
+    # Gets existing row based on unique constraint.
     @staticmethod
     def fetch_existing(model, instance):
         """
@@ -612,8 +610,8 @@ class dbService:
         """
         conditions = []
         for attr in inspect(instance).attrs:
-            # Reflectively build conditions based on the object's attributes (ChatGPT)
-            # only constrained fields
+            # Reflectively build conditions based on the object's attributes (ChatGPT).
+            # Only build conditions for constrained fields.
             if attr.key in {c.name for c in model.__table_args__[0].columns}:
                 conditions.append(
                     getattr(model, attr.key) == getattr(instance, attr.key)
@@ -678,9 +676,9 @@ class dbService:
             ufloat_vp2="not analyzed",
             ufloat_vdx="not analyzed",
         )
-        #
+        
         x = np.arange(0, stream_reads / sec_div, 1 / scan_rate)
-        # sample test data
+        # Nominal test data is defined below.
         ain0, ain1, ain2 = np.ones_like(x), np.ones_like(x), np.ones_like(x)
         # ain0 = P1
         ain0[:] = 0.9451
@@ -696,12 +694,12 @@ class dbService:
         ain2[(x >= 0.5) & (x < 2)] = x[(x >= 0.5) & (x < 2)] * 0.368 + 0.016
         ain2[(x >= 2)] = 2 * 0.368 + 0.016
 
-        # apply noise
+        # Apply noise.
         ain0 = np.random.normal(ain0, ain0_uncertainty)
         ain1 = np.random.normal(ain1, ain1_uncertainty)
         ain2 = np.random.normal(ain2, ain2_uncertainty)
 
-        # create stream reads and scans
+        # Create stream reads and scans.
         j = 1
         for k in range(5):
             i = k * 0.5
@@ -726,7 +724,6 @@ class dbService:
 
     @staticmethod
     def start():
-        # create sample data - ljconfig, constants, test, streamreads, scan
-        # get actual values from matlab UncertaintyPropagation for voltages and constants
+        # Create sample data - ljconfig, constants, test, stream_read, scan.
         if not db.session.get(Constants, 1):
             dbService.populate_sample_data()

@@ -21,8 +21,16 @@
         <tr>
             <th>P1 Slope</th>
             <th>P1 Offset psi</th>
+            <th>P1 Linearity %</th>
+            <th>P1 Hysteresis %</th>
             <th>P2 Slope</th>
             <th>P2 Offset psi</th>
+            <th>P2 Linearity %</th>
+            <th>P2 Hysteresis %</th>
+            <th>X Slope</th>
+            <th>X Offset v</th>
+            <th>X Linearity %</th>
+            <th>X Hysteresis %</th>
             <th>Rho Avg kg/m3</th>
             <th>± Rho Uncertainty kg/m3</th>
         </tr>
@@ -47,8 +55,16 @@
             <tr>
                 <td>{{ c.p1_slope }}</td>
                 <td>{{ c.p1_offset }} psi</td>
+                <td>{{ c.p1_linearity }}%</td>
+                <td>{{ c.p1_hysteresis }}%</td>
                 <td>{{ c.p2_slope }}</td>
                 <td>{{ c.p2_offset }} psi</td>
+                <td>{{ c.p2_linearity }} %</td>
+                <td>{{ c.p2_hysteresis }} %</td>
+                <td>{{ c.x_slope }}</td>
+                <td>{{ c.x_offset }} v</td>
+                <td>{{ c.x_linearity }} %</td>
+                <td>{{ c.x_hysteresis }} %</td>
                 <td>{{ c.rho_avg }} kg/m3</td>
                 <td>±{{ c.rho_uncertainty }} kg/m3</td>
             </tr>
